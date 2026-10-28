@@ -1,0 +1,223 @@
+// Ville imaginaire aléatoire : routes courbes, bâtiments placés au hasard, parcs, étangs, forêts.
+// La ville est fabriquée comme une réponse « OpenStreetMap » fictive, puis lue par le même code que la carte réelle
+// (donc : mêmes routes, mêmes collisions, mêmes drapeaux / pièces, même mini-carte).
+import { parseOSM, RW } from './real-core.js';
+
+const LAT0 = 46, LON0 = -71;                       // origine arbitraire (la ville est inventée)
+const KZ = 111320, KX = 111320 * Math.cos(LAT0 * Math.PI / 180);
+
+function rngOf(seed) {
+  let a = (seed >>> 0) || 1;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const ll = (x, z) => ({ lat: LAT0 - z / KZ, lon: LON0 + x / KX });
+
+function segCross(a, b, c, d) {                     // les segments ab et cd se croisent-ils ?
+  const o = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  const d1 = o(a, b, c), d2 = o(a, b, d), d3 = o(c, d, a), d4 = o(c, d, b);
+  return (d1 > 0) !== (d2 > 0) && (d3 > 0) !== (d4 > 0);
+}
+
+export function generateCityJSON(seed, half = 400) {
+  const R = rngOf(seed * 2654435761 + 12345);
+  for (let i = 0; i < 6; i++) R();
+  const rr = (a, b) => a + (b - a) * R();
+
+  /* ---------------------------------------------------------------- 1. nœuds de carrefour (grille déformée) */
+  const S = rr(88, 106), N = Math.floor((half - 60) / S), pts = new Map(), nodes = [];
+  const jit = S * 0.22;
+  for (let i = -N; i <= N; i++) for (let j = -N; j <= N; j++) {
+    const x = i * S + rr(-jit, jit), z = j * S + rr(-jit, jit);
+    if (Math.hypot(x, z) > half - 45) continue;                 // coins coupés : ville plutôt ronde
+    const n = { id: nodes.length, i, j, x, z, deg: 0 }; nodes.push(n); pts.set(i + ',' + j, n);
+  }
+  let edges = [];
+  for (const n of nodes) for (const [di, dj] of [[1, 0], [0, 1]]) {
+    const m = pts.get((n.i + di) + ',' + (n.j + dj)); if (m) edges.push({ a: n, b: m });
+  }
+  // quelques routes en moins (rues sans issue, îlots plus grands) — en gardant tout relié
+  for (let k = edges.length - 1; k > 0; k--) { const q = Math.floor(R() * (k + 1)); [edges[k], edges[q]] = [edges[q], edges[k]]; }
+  const deg = new Map(); for (const e of edges) { deg.set(e.a.id, (deg.get(e.a.id) || 0) + 1); deg.set(e.b.id, (deg.get(e.b.id) || 0) + 1); }
+  edges = edges.filter(e => {
+    if (R() < 0.17 && deg.get(e.a.id) > 2 && deg.get(e.b.id) > 2) { deg.set(e.a.id, deg.get(e.a.id) - 1); deg.set(e.b.id, deg.get(e.b.id) - 1); return false; }
+    return true;
+  });
+  // composante principale seulement
+  {
+    const adj = new Map(nodes.map(n => [n.id, []])); for (const e of edges) { adj.get(e.a.id).push(e.b.id); adj.get(e.b.id).push(e.a.id); }
+    const seen = new Set(); let best = [];
+    for (const n of nodes) {
+      if (seen.has(n.id)) continue;
+      const comp = [], st = [n.id]; seen.add(n.id);
+      while (st.length) { const c = st.pop(); comp.push(c); for (const q of adj.get(c)) if (!seen.has(q)) { seen.add(q); st.push(q); } }
+      if (comp.length > best.length) best = comp;
+    }
+    const keep = new Set(best); edges = edges.filter(e => keep.has(e.a.id) && keep.has(e.b.id));
+  }
+
+  /* ---------------------------------------------------------------- 2. routes courbes (échantillonnées tous les ~8 m) */
+  const placed = [];                                              // arêtes déjà tracées (pour éviter les croisements)
+  const cls = () => { const r = R(); return r < 0.56 ? 'residential' : r < 0.84 ? 'tertiary' : 'cycleway'; };
+  let nid = 1000;
+  const nodeOf = new Map();                                       // carrefour -> id de nœud
+  const nidFor = n => { if (!nodeOf.has(n.id)) nodeOf.set(n.id, nid++); return nodeOf.get(n.id); };
+  const roads = [];
+  for (const e of edges) {
+    const A = [e.a.x, e.a.z], B = [e.b.x, e.b.z], dx = B[0] - A[0], dz = B[1] - A[1], L = Math.hypot(dx, dz) || 1, nx = -dz / L, nz = dx / L;
+    const s = R() < 0.35;                                         // courbe en S ou en arc
+    const b1 = rr(-0.22, 0.22) * L * (s ? 0.6 : 1), b2 = s ? -b1 * rr(0.6, 1.1) : b1;
+    const C1 = [A[0] + dx * 0.33 + nx * b1, A[1] + dz * 0.33 + nz * b1], C2 = [A[0] + dx * 0.66 + nx * b2, A[1] + dz * 0.66 + nz * b2];
+    const K = Math.max(6, Math.ceil(L / 8)), P = [];
+    for (let k = 0; k <= K; k++) {
+      const t = k / K, u = 1 - t;
+      P.push([u * u * u * A[0] + 3 * u * u * t * C1[0] + 3 * u * t * t * C2[0] + t * t * t * B[0], u * u * u * A[1] + 3 * u * u * t * C1[1] + 3 * u * t * t * C2[1] + t * t * t * B[1]]);
+    }
+    let bad = false;                                              // croise une route déjà tracée (hors voisines) ?
+    for (const o of placed) {
+      if (o.a === e.a || o.a === e.b || o.b === e.a || o.b === e.b) continue;
+      for (let k = 0; k < P.length - 1 && !bad; k++) for (let q = 0; q < o.P.length - 1; q++) if (segCross(P[k], P[k + 1], o.P[q], o.P[q + 1])) { bad = true; break; }
+      if (bad) break;
+    }
+    if (bad) continue;
+    const c = cls();
+    const rec = { a: e.a, b: e.b, P, cls: c }; placed.push(rec);
+    e.a.deg++; e.b.deg++;
+  }
+  // un carrefour ne doit pas n'avoir que des pistes cyclables : au moins une vraie route
+  const hasCar = new Map();
+  for (const r of placed) if (r.cls !== 'cycleway') { hasCar.set(r.a.id, 1); hasCar.set(r.b.id, 1); }
+  for (const r of placed) if (r.cls === 'cycleway' && (!hasCar.has(r.a.id) || !hasCar.has(r.b.id))) { r.cls = 'residential'; hasCar.set(r.a.id, 1); hasCar.set(r.b.id, 1); }
+  // 1 route plus large traverse la ville (axe principal) : on élargit les routes proches de l'axe z≈0
+  for (const r of placed) if (r.cls === 'tertiary' && Math.abs((r.a.z + r.b.z) / 2) < S * 0.6) r.cls = 'secondary';
+
+  const els = [];
+  const samples = [];                                             // {x,z,hw} pour garder les bâtiments hors des routes
+  const SK = 20, sgrid = new Map(), sKey = (x, z) => Math.floor(x / SK) + ',' + Math.floor(z / SK);
+  const addSample = (x, z, hw) => { const k = sKey(x, z); let a = sgrid.get(k); if (!a) sgrid.set(k, a = []); a.push([x, z, hw]); samples.push([x, z, hw]); };
+  let wid = 50000;
+  for (const r of placed) {
+    const ids = r.P.map((p, k) => k === 0 ? nidFor(r.a) : k === r.P.length - 1 ? nidFor(r.b) : nid++);
+    const hw = RW[r.cls] / 2;
+    r.P.forEach(p => addSample(p[0], p[1], hw));
+    // échantillons intermédiaires plus serrés pour que les tests de distance soient fiables
+    for (let k = 0; k < r.P.length - 1; k++) addSample((r.P[k][0] + r.P[k + 1][0]) / 2, (r.P[k][1] + r.P[k + 1][1]) / 2, hw);
+    r.hw = hw; r.ids = ids;
+    els.push({ type: 'way', id: wid++, nodes: ids, geometry: r.P.map(p => ll(p[0], p[1])), tags: { highway: r.cls } });
+  }
+  const nearRoad = (x, z, pad) => {                               // distance au bord de route le plus proche < pad ?
+    const cx = Math.floor(x / SK), cz = Math.floor(z / SK), need = Math.ceil((pad + 14) / SK);
+    for (let a = -need; a <= need; a++) for (let b = -need; b <= need; b++) {
+      const g = sgrid.get((cx + a) + ',' + (cz + b)); if (!g) continue;
+      for (const s of g) if (Math.hypot(s[0] - x, s[1] - z) < s[2] + pad) return true;
+    }
+    return false;
+  };
+
+  /* ---------------------------------------------------------------- 3. parcs, étangs, forêts (zones libres) */
+  const blobs = [];                                               // {x,z,r}
+  const blobPoly = (cx, cz, r, rough) => {
+    const ph = [R() * 6.28, R() * 6.28, R() * 6.28], g = [], n = 30;
+    for (let k = 0; k <= n; k++) {
+      const a = (k % n) / n * Math.PI * 2, rad = r * (1 + rough * (0.5 * Math.sin(3 * a + ph[0]) + 0.3 * Math.sin(5 * a + ph[1]) + 0.2 * Math.sin(2 * a + ph[2])));
+      g.push(ll(cx + Math.cos(a) * rad, cz + Math.sin(a) * rad));
+    }
+    return g;
+  };
+  const free = (x, z, r) => !nearRoad(x, z, r * 1.18 + 3) && !blobs.some(b => Math.hypot(b.x - x, b.z - z) < b.r + r * 1.18 + 6) && Math.hypot(x, z) < half - 90;
+  const makeBlob = (kind, r0, r1, tries = 1500) => {
+    for (let t = 0; t < tries; t++) {
+      const r = rr(r0, r1) * (1 - t / 3000), x = rr(-half + 100, half - 100), z = rr(-half + 100, half - 100);
+      if (!free(x, z, r)) continue;
+      blobs.push({ x, z, r: r * 1.2, kind });
+      const tags = kind === 'water' ? { natural: 'water' } : kind === 'wood' ? { natural: 'wood' } : { leisure: 'park' };
+      els.push({ type: 'way', id: wid++, geometry: blobPoly(x, z, r, 0.16), tags });
+      return true;
+    }
+    return false;
+  };
+  const nPark = 3 + Math.floor(R() * 2), nPond = 2 + Math.floor(R() * 2), nWood = 2 + Math.floor(R() * 2);
+  for (let i = 0; i < nPark; i++) makeBlob('park', 24, 36);
+  for (let i = 0; i < nPond; i++) makeBlob('water', 12, 22);
+  for (let i = 0; i < nWood; i++) makeBlob('wood', 22, 34);
+
+  /* ---------------------------------------------------------------- 4. bâtiments */
+  const bs = [];                                                  // {x,z,r}
+  const bgrid = new Map(), BK = 30;
+  const bAdd = b => { bs.push(b); const k = Math.floor(b.x / BK) + ',' + Math.floor(b.z / BK); let a = bgrid.get(k); if (!a) bgrid.set(k, a = []); a.push(b); };
+  const bFree = (x, z, r) => {
+    const cx = Math.floor(x / BK), cz = Math.floor(z / BK);
+    for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) { const g = bgrid.get((cx + a) + ',' + (cz + b)); if (g) for (const o of g) if (Math.hypot(o.x - x, o.z - z) < (o.r + r) * 0.8) return false; }
+    return true;
+  };
+  const inBlob = (x, z, r) => blobs.some(b => Math.hypot(b.x - x, b.z - z) < b.r + r);
+  let bid = 900000;
+  const tryBuilding = (cx, cz, w, d, ang) => {
+    const r = Math.hypot(w, d) / 2;
+    if (Math.hypot(cx, cz) > half - 55) return false;
+    if (!bFree(cx, cz, r) || inBlob(cx, cz, r * 0.8)) return false;
+    const co = Math.cos(ang), si = Math.sin(ang), loc = (u, v) => [cx + u * co - v * si, cz + u * si + v * co];
+    const shapeR = R(), hw2 = w / 2, hd2 = d / 2;
+    let ring;
+    if (shapeR < 0.7) ring = [[-hw2, -hd2], [hw2, -hd2], [hw2, hd2], [-hw2, hd2]];
+    else if (shapeR < 0.88) {                                     // bâtiment en L
+      const cw = w * rr(0.35, 0.5), cd = d * rr(0.4, 0.55), sx = R() < 0.5 ? 1 : -1, sz = R() < 0.5 ? 1 : -1;
+      const q = [[-hw2, -hd2], [hw2, -hd2], [hw2, hd2], [-hw2, hd2]];
+      const ix = sx > 0 ? hw2 : -hw2, iz = sz > 0 ? hd2 : -hd2;
+      ring = []; for (const c of q) {
+        if (c[0] === ix && c[1] === iz) { ring.push([ix - sx * cw, iz], [ix - sx * cw, iz - sz * cd], [ix, iz - sz * cd]); } else ring.push(c);
+      }
+    } else { ring = []; for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; ring.push([Math.cos(a) * hw2, Math.sin(a) * hd2]); } }   // tour ronde
+    const P = ring.map(c => loc(c[0], c[1]));
+    for (const p of P) if (nearRoad(p[0], p[1], 3.2)) return false;
+    if (nearRoad(cx, cz, 3.2)) return false;
+    // hauteur : plus haut vers le centre-ville
+    const dc = Math.hypot(cx, cz) / half, rd = R();
+    let h, bt;
+    if (rd < 0.58 - dc * 0.15) { h = rr(5.2, 8); bt = 'house'; }
+    else if (rd < 0.84) { h = rr(9, 16); bt = 'apartments'; }
+    else if (rd < 0.95 - dc * 0.05) { h = rr(18, 32); bt = 'commercial'; }
+    else { h = rr(34, 58 - dc * 20); bt = 'office'; }
+    if (shapeR >= 0.88 && h < 12) h = rr(12, 22);
+    bAdd({ x: cx, z: cz, r });
+    const g = P.map(p => ll(p[0], p[1])); g.push(g[0]);
+    els.push({ type: 'way', id: bid++, geometry: g, tags: { building: bt, height: h.toFixed(1) } });
+    return true;
+  };
+  // (a) le long des routes, avec retrait, rotation et trous aléatoires
+  for (const r of placed) {
+    const P = r.P, cum = [0]; for (let k = 1; k < P.length; k++) cum.push(cum[k - 1] + Math.hypot(P[k][0] - P[k - 1][0], P[k][1] - P[k - 1][1]));
+    const total = cum[cum.length - 1];
+    if (r.cls === 'cycleway') continue;
+    const at = s => {
+      let k = 1; while (k < cum.length - 1 && cum[k] < s) k++;
+      const t = (s - cum[k - 1]) / ((cum[k] - cum[k - 1]) || 1), x = P[k - 1][0] + (P[k][0] - P[k - 1][0]) * t, z = P[k - 1][1] + (P[k][1] - P[k - 1][1]) * t;
+      const dx = P[k][0] - P[k - 1][0], dz = P[k][1] - P[k - 1][1], l = Math.hypot(dx, dz) || 1;
+      return { x, z, tx: dx / l, tz: dz / l };
+    };
+    for (const side of [-1, 1]) {
+      let s = rr(8, 24);
+      while (s < total - 8) {
+        const w = rr(8, 20), d = rr(8, 15), gap = rr(3.5, 12);
+        const q = at(Math.min(total, s + w / 2)), off = r.hw + gap + d / 2;
+        const cx = q.x + (-q.tz) * off * side, cz = q.z + q.tx * off * side;
+        const ang = Math.atan2(q.tz, q.tx) + rr(-0.1, 0.1);
+        tryBuilding(cx, cz, w, d, ang);
+        s += w + (R() < 0.2 ? rr(14, 40) : rr(1.5, 9));
+      }
+    }
+  }
+  // (b) bâtiments dispersés à l'intérieur des îlots, orientés au hasard
+  for (let t = 0; t < 1400; t++) {
+    const w = rr(8, 17), d = rr(8, 14), cx = rr(-half + 50, half - 50), cz = rr(-half + 50, half - 50);
+    tryBuilding(cx, cz, w, d, R() * Math.PI);
+  }
+  return { elements: els, half, nBuildings: bs.length };
+}
+
+// ville prête à jouer : même structure que la carte réelle
+export function makeCity(seed, tri, half = 400) {
+  const j = generateCityJSON(seed, half);
+  const D = parseOSM(j, LAT0, LON0, tri, half);
+  D.synthetic = true; D.me = [0, 0]; D.heading = null; D.seed = seed;
+  return D;
+}

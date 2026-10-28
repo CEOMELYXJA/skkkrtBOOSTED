@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Dash</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Great+Vibes&family=Inter:wght@300;400;600&family=Orbitron:wght@400;600&family=Pirata+One&display=swap">
+<style>
+:root{--bg:#fff;--fg:#000;--ac:var(--fg);--ff:Inter,-apple-system,system-ui,sans-serif;--z:1;--sz:1;--mut:#8a8a8a;--line:rgba(128,128,128,.28);--card:rgba(128,128,128,.1)}
+[data-t=d]{--bg:#000;--fg:#fff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:calc(15px*var(--z))/1.4 var(--ff);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);overflow-x:hidden}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px}
+header b{font-weight:600;letter-spacing:.01em}
+#st{color:var(--mut);font-size:.87em}
+button{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 14px;cursor:pointer}
+button.on{background:var(--ac);color:var(--bg);border-color:var(--ac)}
+#th{padding:6px 10px;border-radius:99px;font-size:.87em}
+nav{display:flex;gap:4px;padding:0 14px;border-bottom:1px solid var(--line)}
+nav button{flex:1;border:0;border-radius:0;background:none;color:var(--mut);padding:10px 0;font-size:.92em}
+nav button.on{color:var(--fg);box-shadow:inset 0 -2px var(--ac);background:none}
+section{display:none;padding:16px 18px 40px;max-width:520px;margin:auto}
+section.on{display:block}
+#gauge{width:100%;max-width:340px;display:block;margin:0 auto}
+#gauge path{fill:none;stroke-linecap:round;stroke-width:9}#arc{stroke:var(--ac)}.tk{stroke:var(--line)}
+#sp{font-size:calc(84px*var(--sz));font-weight:300;text-align:center;line-height:1;margin-top:-1.02em;font-variant-numeric:tabular-nums}
+#un{text-align:center;color:var(--mut);margin-bottom:18px}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.c{background:var(--card);border-radius:14px;padding:12px 14px}
+.c small{display:block;color:var(--mut);font-size:.8em}
+.c b{font-size:1.47em;font-weight:500;font-variant-numeric:tabular-nums}
+.c b.big{font-size:2.6em;font-weight:400;line-height:1.1}
+.bar{height:8px;background:var(--line);border-radius:9px;overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;background:var(--ac);width:0;transition:width .4s}
+h3{margin:22px 0 8px;font-size:1em;font-weight:600}
+p.n{color:var(--mut);font-size:.87em;margin:6px 0}
+.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);gap:10px}
+.row span:last-child{color:var(--mut);text-align:right}
+#hue{width:100%;height:30px;-webkit-appearance:none;appearance:none;border-radius:99px;background:linear-gradient(90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)}
+#hue::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;background:#fff;border:3px solid #000}
+canvas{width:100%;height:220px;background:var(--card);border-radius:14px;margin-top:10px}
+.err{color:#d33}
+.hl{display:flex;align-items:baseline;gap:8px}
+.sk{font-style:italic;font-size:.8em;opacity:.17;letter-spacing:.04em;white-space:nowrap;user-select:none}
+.sk small{font-size:.7em;margin-left:3px}
+.num{width:100%;font:inherit;color:inherit;background:none;border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-top:4px}
+[data-sort]>*{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.drag{position:relative;z-index:50;pointer-events:none;box-shadow:0 12px 32px rgba(0,0,0,.45);border-radius:14px;background:var(--bg);scale:1.03}
+.rg{width:100%;accent-color:var(--ac)}
+input[type=color]{width:100%;height:36px;border:0;background:none;padding:0}
+</style>
+</head>
+<body>
+<header><div class="hl"><b>Dash</b><i class="sk">SKKKRT<small>w4r3z</small></i></div><span id="st">Déconnecté</span><button id="th" aria-label="Thème">☾</button></header>
+<nav id="nav"><button data-s="a" class="on">Tableau</button><button data-s="b">Trajets</button><button data-s="c">Météo</button><button data-s="d">Entretien</button><button data-s="e">Jeu</button><button data-s="f">3D</button></nav>
+
+<section id="a" class="on">
+ <button id="cn" style="width:100%;margin-bottom:12px">Connecter ma trottinette</button>
+ <p id="ns" class="n err" hidden>Ce navigateur ne permet pas le Bluetooth web (Safari sur iPhone ne le permet pas). Ouvre cette page dans l'app gratuite <b>Bluefy</b> (App Store), ou utilise Chrome sur Android.</p>
+ <button id="bf" hidden style="width:100%;margin-bottom:12px">Ouvrir cette page dans Bluefy</button>
+ <div id="dash" data-sort>
+  <div class="blk" data-id="jauge"><svg id="gauge" viewBox="0 0 200 110"><path class="tk" d="M12 100A88 88 0 0 1 188 100"/><path id="arc" d="M12 100A88 88 0 0 1 188 100" stroke-dasharray="277" stroke-dashoffset="277"/></svg>
+   <div id="sp">--</div><div id="un">km/h</div>
+   <div class="g"><div class="c"><small>Fait à date</small><b class="big" id="f1">--</b><small id="f2"></small></div><div class="c"><small>Il me reste (approx.)</small><b class="big" id="r1">--</b><small id="r2"></small></div></div></div>
+  <div class="blk" data-id="bat"><div class="c"><small>Batterie</small><b id="bt">--</b><div class="bar"><i id="bb"></i></div><small id="rg" style="margin-top:6px"></small></div></div>
+  <div class="blk" data-id="stats"><h3>Statistiques</h3><div class="g" id="sg" data-sort>
+   <div class="c" data-id="tr"><small>Trajet (session)</small><b id="tr">--</b></div>
+   <div class="c" data-id="tm"><small>Durée</small><b id="tm">--</b></div>
+   <div class="c" data-id="od"><small>Odomètre</small><b id="od">--</b></div>
+   <div class="c" data-id="av"><small>Vitesse moy. session</small><b id="av">--</b></div>
+   <div class="c" data-id="ac"><small>Accélération</small><b id="ac">--</b></div>
+   <div class="c" data-id="vs"><small>vs ta moyenne</small><b id="vs">--</b></div></div></div>
+  <div class="blk" data-id="cmd"><h3>Commandes</h3><div class="g" id="cg" data-sort>
+   <button data-id="head" data-c="head">Phare avant</button><button data-id="tail" data-c="tail">Feu arrière</button>
+   <button data-id="lock" data-c="lock">Verrouiller</button><button data-id="unit" data-c="unit">Unité mph</button>
+   <button data-id="start" data-c="start">Démarrage zéro</button><button data-id="cruise" data-c="cruise">Régulateur</button>
+   <button data-id="g1" data-g="1">Mode 1</button><button data-id="g2" data-g="2">Mode 2</button></div></div>
+  <div class="blk" data-id="fx"><h3>Effets de lumière</h3>
+   <div class="g" id="ft2"><button data-tg="head">Avant</button><button data-tg="tail">Arrière</button><button data-tg="both" class="on">Les deux</button></div>
+   <div class="g" id="fm"><button data-m="slow">Clignotant lent</button><button data-m="strobe">Stroboscope</button><button data-m="alt">Alternance</button><button data-m="spd">Selon ma vitesse</button><button data-m="brk">Feu de frein</button><button data-m="mus">Selon la musique</button></div>
+   <button id="fo" style="width:100%">Arrêter l'effet</button>
+   <p class="n">Tes feux reviennent à leur état d'avant à l'arrêt de l'effet. « Musique » écoute avec le micro du téléphone. Garde l'écran allumé. Vérifie la réglementation locale pour les feux clignotants en roulant.</p></div>
+  <div class="blk" data-id="horn"><h3>Klaxon du téléphone</h3>
+   <div class="g" id="hn"><button data-k="0">Grave</button><button data-k="1">Aigu</button><button data-k="2">Double</button><button data-k="3">Sirène</button></div>
+   <p class="n">Joue un son sur le haut-parleur du téléphone. Le vrai klaxon de la trottinette ne peut pas être modifié : KCQ n'envoie aucune commande de son.</p></div>
+  <div class="blk" data-id="feux"><h3>Effet des feux sur la batterie</h3><div id="im"></div>
+   <p class="n">Mesuré en roulant : l'app compare les % perdus par heure avec et sans feux. Plus tu roules, plus c'est précis.</p></div>
+  <div class="blk" data-id="conso"><h3>Consommation par composante</h3><div id="cs"></div>
+   <p class="n">Mesuré sur toi : laisse la trottinette allumée à l'arrêt (sans feux, puis avec le phare, puis avec le feu arrière) et roule un peu. La batterie est lue en % entiers, il faut des dizaines de minutes pour que ce soit fiable.</p></div>
+  <div class="blk" data-id="si"><h3>Et si…</h3><div id="sr"></div><p class="n" id="sn"></p>
+   <div class="g"><label class="c"><small>Poids toi + trottinette (kg)</small><input id="kg" class="num" type="number" inputmode="decimal" min="30" max="250"></label><label class="c"><small>Capacité batterie (Wh)</small><input id="wh" class="num" type="number" inputmode="decimal" min="50" max="2000"></label></div></div>
+  <div class="blk" data-id="def"><h3>Défauts</h3><div id="ft" class="n">Aucun</div></div>
+  <div class="blk" data-id="diag"><h3>Diagnostic Bluetooth</h3><p class="n" id="fc" style="margin-top:0">Aucune trame reçue</p>
+   <pre id="lg" style="white-space:pre-wrap;word-break:break-all;font:11px/1.4 ui-monospace,monospace;color:var(--mut);margin:0 0 8px"></pre><button id="cl">Copier le journal</button></div>
+  <div class="blk" data-id="look"><h3>Personnaliser</h3>
+   <p class="n" style="margin-top:0">Appui long sur un titre pour déplacer toute la section, ou sur une carte / un bouton pour le déplacer seul.</p>
+   <div class="g" id="fl"></div>
+   <div class="c"><small>Taille du texte</small><input id="zs" class="rg" type="range" min="80" max="150" value="100"></div>
+   <div class="c" style="margin-top:10px"><small>Taille de la vitesse</small><input id="ss" class="rg" type="range" min="60" max="140" value="100"></div>
+   <div class="c" style="margin-top:10px"><small>Fond : couleur (arc-en-ciel)</small><input id="hue" type="range" min="0" max="360" value="0">
+    <small style="margin-top:10px">Fond : sombre ↔ clair</small><input id="lt" class="rg" type="range" min="4" max="96" value="50"></div>
+   <div class="g"><label class="c"><small>Couleur du texte</small><input id="ct" type="color" value="#ffffff"></label><label class="c"><small>Couleur d'accent</small><input id="ca" type="color" value="#ffffff"></label></div>
+   <button id="hr">Couleurs d'origine</button> <button id="ro">Disposition d'origine</button></div>
+ </div>
+</section>
+
+<section id="b"><div id="rt" data-sort>
+ <div class="blk" data-id="gps"><h3>Enregistrer l'itinéraire</h3>
+  <button id="rc" style="width:100%">Démarrer l'enregistrement GPS</button>
+  <canvas id="map" width="480" height="440"></canvas>
+  <p class="n" id="rs"></p><button id="gx">Exporter en GPX</button></div>
+ <div class="blk" data-id="ses"><h3>10 dernières sessions</h3><div id="hs"></div></div>
+</div></section>
+
+<section id="c"><h3>Prochaines 3 heures</h3><div id="wx" class="n">Chargement…</div><button id="wr">Actualiser</button></section>
+
+<section id="d"><div id="en" data-sort>
+ <div class="blk" data-id="fr"><h3>Freins (estimation)</h3>
+  <div class="c"><small>Plaquettes restantes</small><b id="bw">--</b><div class="bar"><i id="bwb"></i></div></div>
+  <p class="n" id="bn"></p><button id="bs">Freins changés</button></div>
+ <div class="blk" data-id="pr"><h3>Prochains entretiens</h3><div id="mt"></div>
+  <p class="n">Estimations génériques basées sur les kilomètres et les freinages brusques détectés, pas sur des données du fabricant. Vérifie tes freins à l'œil.</p></div>
+</div></section>
+
+<section id="e"></section>
+
+<section id="f">
+ <h3>SKKKRT3D · simulateur en ville</h3>
+ <p class="n">Ta i9 devient une vraie manette : la poignée donne la vitesse, le gyro du téléphone (fixé sur le guidon) tourne le monde. 4 mondes, vue 1re ou 2e personne, polices et réglages dans le jeu (⚙). Nouveau : jeu de capture de drapeaux 🚩 avec pièces dorées, chrono et points, chute en percutant un bâtiment, cyclistes à éviter (ou à percuter).</p>
+ <p class="n">1. Connecte ta trottinette dans l'onglet <b>Tableau</b> (la connexion est partagée avec le jeu).<br>2. Entre dans la ville, autorise le gyro, puis <b>Calibrer guidon</b> guidon droit.</p>
+ <button id="g3" class="on" style="width:100%;margin-top:6px">Entrer dans la ville 3D</button>
+ <p class="n" id="g3s"></p>
+</section>
+
+<script src="proto.js"></script>
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const J=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}};
+const W=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}};
+const cfg=J('cfg',{h:null,t:null}),drain=J('drain',{}),idl=J('idl',{}),cal=J('cal',{p:0,km:0,s:0}),hist=J('hist',[]),svc=J('svc',{b0:null,hard:0});
+let pts=J('route',[]),S=null,chW=null,dev=null,busy=false,last=0,lastV=0,lastB=null,lastHard=0,aNow=0,aS=0,aN=0,vS=0,tS=0,vMax=0,rec=null,saveT=0,sb0=null,mvS=0,lastT=null,stV=0,stT=0,ex0=0;
+
+// ---------- Thème ----------
+const F={sys:['Normale',"Inter,-apple-system,system-ui,sans-serif"],got:['Gothique',"'Pirata One',serif"],cal:['Calligraphie',"'Great Vibes',cursive"],dig:['Digitale',"Orbitron,sans-serif"],spo:['Sport',"'Bebas Neue',sans-serif"],ita:['Italique',"Inter,-apple-system,system-ui,sans-serif"]};
+$('#fl').innerHTML=Object.entries(F).map(([k,v])=>`<button data-f="${k}" style="font-family:${v[1]}">${v[0]}</button>`).join('');
+function theme(){
+  const d=cfg.t?cfg.t==='d':matchMedia('(prefers-color-scheme:dark)').matches,r=document.documentElement.style,set=(k,v)=>v==null?r.removeProperty(k):r.setProperty(k,v);
+  document.documentElement.dataset.t=d?'d':'l';$('#th').textContent=d?'☀':'☾';
+  if(cfg.h!=null||cfg.l!=null){const l=cfg.l??(d?11:93);set('--bg',`hsl(${cfg.h||0} ${cfg.h==null?0:d?55:85}% ${l}%)`);set('--fg',l>55?'#111':'#fff')}else{set('--bg');set('--fg')}
+  if(cfg.tx)set('--fg',cfg.tx);
+  document.body.style.fontStyle=cfg.f==='ita'?'italic':'';set('--ac',cfg.ac);set('--ff',F[cfg.f]&&F[cfg.f][1]);set('--z',cfg.z);set('--sz',cfg.sz);
+  $$('#fl button').forEach(b=>b.classList.toggle('on',b.dataset.f===(cfg.f||'sys')));
+  document.querySelector('meta[name=theme-color]').content=getComputedStyle(document.body).backgroundColor;
+}
+const sv=()=>{W('cfg',cfg);theme()};
+$('#th').onclick=()=>{cfg.t=document.documentElement.dataset.t==='d'?'l':'d';cfg.l=null;sv()};
+$('#fl').onclick=e=>{const b=e.target.closest('[data-f]');if(b){cfg.f=b.dataset.f;sv()}};
+$('#zs').oninput=e=>{cfg.z=e.target.value/100;sv()};
+$('#ss').oninput=e=>{cfg.sz=e.target.value/100;sv()};
+$('#hue').oninput=e=>{cfg.h=+e.target.value;sv()};
+$('#lt').oninput=e=>{cfg.l=+e.target.value;sv()};
+$('#ct').oninput=e=>{cfg.tx=e.target.value;sv()};
+$('#ca').oninput=e=>{cfg.ac=e.target.value;sv()};
+$('#hr').onclick=()=>{cfg.h=cfg.l=cfg.tx=cfg.ac=null;sv()};
+$('#ro').onclick=()=>{delete cfg.o;W('cfg',cfg);location.reload()};
+$('#zs').value=(cfg.z||1)*100;$('#ss').value=(cfg.sz||1)*100;if(cfg.h!=null)$('#hue').value=cfg.h;if(cfg.l!=null)$('#lt').value=cfg.l;
+let tap=0;$('#gauge').onclick=()=>{if(++tap>=3){tap=0;$('#look').scrollIntoView({behavior:'smooth'})}setTimeout(()=>tap=0,700)};
+theme();
+
+// ---------- Appui long = déplacer ----------
+for(const id in cfg.o||{}){const bx=document.getElementById(id);if(bx)cfg.o[id].forEach(k=>{const c=[...bx.children].find(x=>x.dataset.id===k);c&&bx.appendChild(c)})}
+(()=>{
+  let it=null,bx,tm,loop,sx,sy,lx,ly,gx,gy,on=0,end=0;
+  const place=()=>{
+    it.style.transform='none';
+    let t=document.elementFromPoint(lx,ly);while(t&&t.parentElement!==bx)t=t.parentElement;
+    if(t&&t!==it&&t.dataset.id)bx.insertBefore(it,it.compareDocumentPosition(t)&4?t.nextSibling:t);
+    const r=it.getBoundingClientRect();it.style.transform=`translate(${lx-gx-r.left}px,${ly-gy-r.top}px)`;
+  };
+  const fin=()=>{clearTimeout(tm);clearInterval(loop);if(on){it.classList.remove('drag');it.style.transform='';cfg.o=cfg.o||{};cfg.o[bx.id]=[...bx.children].map(c=>c.dataset.id);W('cfg',cfg);end=Date.now()}on=0;it=null};
+  addEventListener('pointerdown',e=>{
+    if(!e.isPrimary||e.target.closest('input,canvas'))return;
+    const el=e.target.closest('[data-id]');if(!el||!el.parentElement.hasAttribute('data-sort'))return;
+    it=el;bx=el.parentElement;sx=lx=e.clientX;sy=ly=e.clientY;
+    tm=setTimeout(()=>{on=1;const r=it.getBoundingClientRect();gx=sx-r.left;gy=sy-r.top;it.classList.add('drag');navigator.vibrate&&navigator.vibrate(30);
+      loop=setInterval(()=>{if(ly<90)scrollBy(0,-12);else if(ly>innerHeight-90)scrollBy(0,12);place()},30)},450);
+  });
+  addEventListener('pointermove',e=>{if(!it)return;lx=e.clientX;ly=e.clientY;if(!on&&Math.hypot(lx-sx,ly-sy)>10){clearTimeout(tm);it=null}});
+  addEventListener('pointerup',fin);addEventListener('pointercancel',fin);
+  addEventListener('touchmove',e=>{if(on)e.preventDefault()},{passive:false});
+  addEventListener('contextmenu',e=>{if(it)e.preventDefault()});
+  addEventListener('click',e=>{if(Date.now()-end<500){e.stopPropagation();e.preventDefault()}},true);
+})();
+
+// ---------- Onglets ----------
+$$('#nav button').forEach(b=>b.onclick=()=>{$$('#nav button,section').forEach(x=>x.classList.remove('on'));b.classList.add('on');$('#'+b.dataset.s).classList.add('on');if(b.dataset.s==='c')wx();if(b.dataset.s==='b')draw();if(b.dataset.s==='d')maint()});
+
+// ---------- Bluetooth ----------
+const SVC=P.U('fff0'),ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const hx=a=>[...a].map(x=>x.toString(16).padStart(2,'0')).join(' '),sleep=t=>new Promise(r=>setTimeout(r,t));
+let nfr=0,unk=0,lg0=[],wlk=null;
+const lg=m=>{lg0.push(new Date().toLocaleTimeString('fr-CA')+' '+m);if(lg0.length>60)lg0.shift();$('#lg').textContent=lg0.join('\n')};
+lg('Bluetooth web : '+(navigator.bluetooth?'OK':'ABSENT')+' · HTTPS : '+(isSecureContext?'oui':'non')+' · '+(ios?'iOS':'autre'));
+if(!navigator.bluetooth){$('#ns').hidden=false;if(ios)$('#bf').hidden=false}
+$('#bf').onclick=()=>{location.href='bluefy://open?url='+encodeURIComponent(location.href)};
+$('#cl').onclick=()=>navigator.clipboard&&navigator.clipboard.writeText(lg0.join('\n')).then(()=>$('#cl').textContent='Copié');
+const wl=async()=>{try{wlk=await navigator.wakeLock.request('screen')}catch(e){}};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&dev&&dev.gatt.connected)wl()});
+$('#cn').onclick=async()=>{
+  if(!navigator.bluetooth){$('#ns').hidden=false;$('#st').textContent='Bluetooth web absent';return}
+  if(dev&&dev.gatt.connected){userDisc=true;dev.gatt.disconnect();return}
+  try{
+    $('#st').textContent='Choisis ta trottinette…';lg('Recherche…');
+    dev=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:[SVC,P.U('ffe0'),P.U('180a'),'6e400001-b5a3-f393-e0a9-e50e24dcca9e']});
+    lg('Appareil : '+(dev.name||dev.id));$('#st').textContent='Connexion…';
+    dev.addEventListener('gattserverdisconnected',onDisc);
+    userDisc=false;recoN=0;
+    const g=await dev.gatt.connect();lg('GATT connecté');
+    if(await setupLink(g,false)===false)return;
+  }catch(e){lg('ERREUR '+e.name+' : '+e.message);$('#st').textContent=e.name==='NotFoundError'?'Annulé':'Erreur : '+e.message}
+};
+async function setupLink(g,again){
+  let s;try{s=await g.getPrimaryService(SVC)}catch(e){const all=await g.getPrimaryServices().catch(()=>[]);lg('Service FFF0 introuvable. Vus : '+all.map(x=>x.uuid.slice(4,8)).join(',')+' (mauvais appareil ?)');throw e}
+  lg('Service FFF0 OK');chW=await s.getCharacteristic(P.U('fff6'));lg('Écriture FFF6 OK');
+  try{ // même vérification que KCQ : état du mot de passe (FFF1) puis mot de passe (FFF5)
+    const on=(await(await s.getCharacteristic(P.U('fff1'))).readValue()).getUint8(0)===1;lg('Mot de passe actif : '+(on?'oui':'non'));
+    if(on&&!again){const v=await(await s.getCharacteristic(P.U('fff5'))).readValue(),u=new Uint8Array(v.buffer,v.byteOffset,v.byteLength);
+      let pin;try{pin=new TextDecoder('gbk').decode(u)}catch(e){pin=new TextDecoder().decode(u)}
+      const t=prompt('Mot de passe de la trottinette :');if(t!==pin.replace(/\0/g,'')){g.disconnect();alert('Mot de passe incorrect');userDisc=true;return false}}
+  }catch(e){lg('Mot de passe : ignoré ('+e.name+')')}
+  const n=await s.getCharacteristic(P.U('fff7'));lg('Notifications FFF7 OK');
+  n.addEventListener('characteristicvaluechanged',e=>{const v=e.target.value;onData(new Uint8Array(v.buffer,v.byteOffset,v.byteLength))});
+  await n.startNotifications();nfr=0;unk=0;reset();wl();
+  $('#st').textContent='Connecté';$('#cn').textContent='Déconnecter';lg('Écoute active, attente des trames…');
+  setTimeout(()=>{if(dev&&dev.gatt.connected&&!nfr){lg('Aucune trame après 5 s. La trottinette est-elle allumée ? KCQ est-elle fermée ?');$('#st').textContent='Connecté, aucune donnée'}},5000);
+}
+let userDisc=false,recoBusy=false,recoN=0;
+function reset(){last=0;lastB=null;aS=aN=vS=tS=vMax=0;sb0=null;mvS=0;lastT=null;stT=Date.now()}
+function onDisc(){
+  lg('Déconnecté');stopFx(true);
+  $('#st').textContent='Déconnecté';$('#cn').textContent='Connecter ma trottinette';
+  if(S&&(S.trip>0||S.time>60)){hist.unshift({d:Date.now(),km:S.trip,min:Math.round(S.time/60),avg:tS?vS/tS:0,max:vMax,acc:aN?aS/aN:0});hist.length=Math.min(hist.length,10);W('hist',hist);W('drain',drain);W('idl',idl);W('cal',cal);W('svc',svc)}
+  S=null;hs();
+  if(!userDisc&&dev)autoReco();userDisc=false;
+}
+// reconnexion automatique après une coupure involontaire (sans rouvrir le sélecteur d'appareil)
+async function autoReco(){
+  if(recoBusy)return;recoBusy=true;
+  for(let i=1;i<=8&&dev&&!userDisc;i++){
+    $('#st').textContent='Reconnexion '+i+'/8…';lg('Reconnexion automatique '+i+'/8');await sleep(Math.min(1200*i,6000));
+    if(userDisc||!dev)break;if(dev.gatt.connected)break;
+    try{const g=await dev.gatt.connect();lg('GATT reconnecté');await setupLink(g,true);recoBusy=false;return}
+    catch(e){lg('Reconnexion échouée : '+e.message)}
+  }
+  recoBusy=false;if(!(dev&&dev.gatt.connected)){$('#st').textContent='Déconnecté (reconnexion impossible)';}
+}
+async function send(frame){
+  if(!chW||busy)return false;busy=true;let ok=false;
+  try{const u=new Uint8Array(frame);chW.writeValueWithResponse?await chW.writeValueWithResponse(u):await chW.writeValue(u);ok=true}
+  catch(e){lg('Écriture échouée : '+e.message)}
+  busy=false;return ok;
+}
+$$('button[data-c]').forEach(b=>b.onclick=()=>{if(!S)return;const k=b.dataset.c;send(P.frame(S,P.CMD[k],!(k==='unit'?S.mph:S[k])))});
+$$('button[data-g]').forEach(b=>b.onclick=()=>{if(!S)return;const g=+b.dataset.g;send(P.frame(S,0,g===2,g))});
+
+// ---------- Données ----------
+function onData(b){
+  const s=P.parse(b);if(!s){if(unk++<5)lg('Trame ignorée : '+hx(b));return}
+  if(++nfr===1)lg('1re trame : '+hx(b));if(nfr%5===0)$('#fc').textContent=nfr+' trames · dernière : '+hx(b);
+  const now=Date.now(),dt=last?(now-last)/1e3:0;last=now;S=s;
+  const k=s.mph?1.6:1,v=Math.min(50,s.speed),mv=v>2;
+  if(dt>0&&dt<5){
+    const c=''+s.head+s.tail,dp=lastB!=null&&lastB>s.bat?lastB-s.bat:0;
+    if(mv){const a=drain[c]=drain[c]||{p:0,s:0};a.s+=dt;a.p+=dp;vS+=v*dt;tS+=dt;vMax=Math.max(vMax,v);mvS+=dt;cal.s+=dt;cal.p+=dp;if(lastT!=null&&s.trip>=lastT&&s.trip-lastT<1)cal.km+=s.trip-lastT}
+    else{const a=idl[c]=idl[c]||{p:0,s:0};a.s+=dt;a.p+=dp}
+    if(dt<2){const a=(v-lastV)/dt;aNow=aNow*.7+a*.3;if(a>.3){aS+=a;aN++}if(a<-8&&now-lastHard>3000){svc.hard++;lastHard=now}}
+  }
+  if(sb0==null)sb0=s.bat;if(Math.abs(v-stV)>.6||v<3){stV=v;stT=now}
+  lastV=v;lastB=s.bat;lastT=s.trip;
+  if(now-saveT>30000){saveT=now;W('drain',drain);W('idl',idl);W('cal',cal);W('svc',svc)}
+  if(svc.b0==null){svc.b0=s.total;W('svc',svc)}
+  const u=s.mph?'mi':'km',f=x=>(x/k).toFixed(1);
+  $('#sp').textContent=(v/k).toFixed(1);$('#un').textContent=s.mph?'mph':'km/h';
+  $('#arc').style.strokeDashoffset=277*(1-Math.min(1,v/50));
+  $('#bt').textContent=s.bat+' %';$('#bb').style.width=s.bat+'%';
+  $('#tr').textContent=f(s.trip)+' '+u;$('#od').textContent=Math.round(s.total/k)+' '+u;
+  $('#tm').textContent=Math.floor(s.time/60)+' min '+String(s.time%60).padStart(2,'0')+' s';
+  const av=tS?vS/tS:0,pa=hist.filter(h=>h.avg>0),mavg=pa.length?pa.reduce((x,h)=>x+h.avg,0)/pa.length:0,pac=hist.filter(h=>h.acc>0),macc=pac.length?pac.reduce((x,h)=>x+h.acc,0)/pac.length:0;
+  $('#av').textContent=(av/k).toFixed(1)+' '+(s.mph?'mph':'km/h');
+  $('#ac').textContent=(aNow/k).toFixed(1)+' /s';
+  $('#vs').textContent=mavg?((av/mavg-1)*100).toFixed(0)+' % vit.'+(macc?' · '+((aNow/macc-1)*100).toFixed(0)+' % acc.':''):'pas encore d\'historique';
+  $$('button[data-c]').forEach(b=>{const c=b.dataset.c;b.classList.toggle('on',!!(c==='unit'?s.mph:s[c]))});
+  $$('button[data-g]').forEach(b=>b.classList.toggle('on',+b.dataset.g===s.gear));
+  const f2=[];P.FAULTS.forEach((n,i)=>{if((s.faults>>i)&1)f2.push(n)});if(s.flags&1)f2.push('Moteur bloqué');if((s.flags>>6)&1)f2.push('Température');
+  $('#ft').textContent=f2.length?f2.join(' · '):'Aucun';$('#ft').className=f2.length?'err':'n';
+  impact();extra(s,k,now);if(now-ex0>2000){ex0=now;conso();si()}
+}
+function rate(c){const a=drain[c];return a&&a.s>300?a.p/(a.s/3600):null}
+function impact(){
+  const base=rate('00'),L={'10':'Phare avant','01':'Feu arrière','11':'Avant + arrière'},o=[`<div class="row"><span>Sans feux</span><span>${base!=null?base.toFixed(1)+' %/h':'à mesurer en roulant'}</span></div>`];
+  for(const c in L){const r=rate(c);o.push(`<div class="row"><span>${L[c]}</span><span>${r==null?'à mesurer':r.toFixed(1)+' %/h'+(base!=null?' ('+(r-base>=0?'+':'')+(r-base).toFixed(1)+')':'')}</span></div>`)}
+  $('#im').innerHTML=o.join('');
+  const cur=S?rate(''+S.head+S.tail)||base:null;$('#rg').textContent=cur&&S?'Autonomie estimée : ~'+Math.round(S.bat/cur*60)+' min de roulage':'';
+}
+impact();
+
+// ---------- Régulateur, fait / reste, consommation, « et si » ----------
+const fm=m=>m>=60?Math.floor(m/60)+' h '+String(Math.round(m%60)).padStart(2,'0'):Math.round(m)+' min';
+function extra(s,k,now){
+  const u=s.mph?'mi':'km',used=Math.max(0,sb0-s.bat),on=(s.flags>>1)&1,st=(now-stT)/1e3;
+  const cb=$('button[data-c=cruise]');if(cb)cb.textContent=on?'Régulateur en marche ✓':s.cruise?(s.speed>=3?'Régulateur : '+Math.min(5,Math.floor(st))+' / 5 s':'Régulateur : roule pour l\'armer'):'Régulateur';
+  const ppk=used>=4&&s.trip>1?used/s.trip:(cal.km>=2&&cal.p>=2?cal.p/cal.km:null),ppm=used>=4&&mvS>180?used/(mvS/60):(cal.s>300&&cal.p>=2?cal.p/(cal.s/60):null);
+  $('#f1').textContent='−'+used+' %';$('#f2').textContent=fm(s.time/60)+' · '+(s.trip/k).toFixed(1)+' '+u;
+  $('#r1').textContent=s.bat+' %';$('#r2').textContent=(ppm?'≈ '+fm(s.bat/ppm):'durée à estimer')+(ppk?' · ≈ '+(s.bat/ppk/k).toFixed(1)+' '+u:'');
+}
+const rt=(o,c)=>{const a=o[c];return a&&a.s>=900&&a.p>=1?a.p/(a.s/3600):null},mn=(o,c)=>o[c]?Math.round(o[c].s/60):0;
+function conso(){
+  const wh=cfg.wh||280,cpu=rt(idl,'00'),m0=rt(drain,'00'),dl=c=>{const a=rt(idl,c),b=rt(drain,c);return a!=null&&cpu!=null?a-cpu:(b!=null&&m0!=null?b-m0:null)};
+  const R=[['Ordinateur central (veille)',cpu,mn(idl,'00')],['Phare avant',dl('10'),mn(idl,'10')+mn(drain,'10')],['Feu arrière',dl('01'),mn(idl,'01')+mn(drain,'01')],['Moteur (en roulant)',m0!=null&&cpu!=null?m0-cpu:null,mn(drain,'00')]];
+  $('#cs').innerHTML=R.map(r=>`<div class="row"><span>${r[0]}</span><span>${r[1]==null?'à mesurer ('+r[2]+' min)':r[1]<=0?'≈ 0 %/h (sous la précision)':r[1].toFixed(1)+' %/h · ≈ '+(r[1]/100*wh).toFixed(1)+' W'}</span></div>`).join('');
+}
+function si(){
+  const kg=cfg.kg||90,wh=cfg.wh||280,hv=hist.filter(h=>h.avg>0),va=hv.length?hv.reduce((x,h)=>x+h.avg,0)/hv.length:20,vr=S&&S.speed>8?Math.min(S.speed,40):Math.min(40,Math.max(10,va));
+  // Wh côté batterie pour 1 km : roulement + air + pente, rendement 75 %
+  const E=(o={})=>{const m=kg+(o.dm||0),vm=(o.v||vr)/3.6,wa=vm+(o.w||0)/3.6;return Math.max(0,m*9.81*.014*(o.cr||1)+.5*1.2*.55*wa*Math.abs(wa)+m*9.81*(o.gr||0))*1000/3600/.75};
+  const cald=cal.km>=2&&cal.p>=3,kk=cald?Math.min(3,Math.max(.3,(cal.p/cal.km)/(E({v:va})/wh*100))):1,P=x=>x/wh*100*kk,base=E();
+  const f=x=>(x<.1?x.toFixed(2):x.toFixed(1))+' %',d=o=>{const x=P(E(o))-P(base);return(x>=0?'+':'')+x.toFixed(2)+' % par km'};
+  const climb=(len,gr)=>f(P(E({gr})*len/1000))+' au lieu de '+f(P(base*len/1000))+' à plat';
+  const R=[['Côte de 100 m à 15 %',climb(100,.15)],['Côte de 300 m à 8 %',climb(300,.08)],['Vent de face 20 km/h',d({w:20})],['Vent de face 40 km/h',d({w:40})],['Vent dans le dos 20 km/h',d({w:-20})],
+    ['5 freinages brusques 25 → 0 km/h','+'+f(P(5*.5*kg*(25/3.6)**2/3600/.75))],['Rouler 5 km/h plus vite',d({v:vr+5})],['+10 kg de charge',d({dm:10})],['Pneus sous-gonflés (−30 %)',d({cr:1.5})],
+    ['Froid à 0 °C',(()=>{const r=100/P(base);return'≈ −'+(r*.15).toFixed(1)+' km d\'autonomie (−15 %)'})()]];
+  $('#sr').innerHTML=R.map(r=>`<div class="row"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('');
+  $('#sn').textContent='Calculé pour '+kg+' kg, '+wh+' Wh, à '+vr.toFixed(0)+' km/h. '+(cald?'Calibré sur tes '+cal.km.toFixed(0)+' km roulés.':'Estimation théorique : règle ton poids et ta capacité, et elle se calibre en roulant.');
+}
+$('#kg').value=cfg.kg||90;$('#wh').value=cfg.wh||280;
+$('#kg').oninput=e=>{cfg.kg=+e.target.value||null;W('cfg',cfg);si()};$('#wh').oninput=e=>{cfg.wh=+e.target.value||null;W('cfg',cfg);si();conso()};
+conso();si();
+
+// ---------- Trajets ----------
+function hs(){const k=S&&S.mph?1.6:1;$('#hs').innerHTML=hist.length?hist.map(h=>`<div class="row"><span>${new Date(h.d).toLocaleDateString('fr-CA',{day:'numeric',month:'short'})} · ${(h.km/k).toFixed(1)} ${k>1?'mi':'km'} · ${h.min} min</span><span>moy. ${(h.avg/k).toFixed(1)} · max ${(h.max/k).toFixed(0)}</span></div>`).join(''):'<p class="n">Aucune session enregistrée.</p>'}
+hs();
+const hav=(a,b)=>{const R=6371,r=Math.PI/180,x=(b[0]-a[0])*r,y=(b[1]-a[1])*r,q=Math.sin(x/2)**2+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(y/2)**2;return 2*R*Math.asin(Math.sqrt(q))};
+function draw(){
+  const c=$('#map'),g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);
+  let d=0;for(let i=1;i<pts.length;i++)d+=hav(pts[i-1],pts[i]);
+  $('#rs').textContent=pts.length?pts.length+' points · '+d.toFixed(2)+' km':'Aucun itinéraire.';
+  if(pts.length<2)return;
+  const la=pts.map(p=>p[0]),lo=pts.map(p=>p[1]),mx=Math.min(...lo),Mx=Math.max(...lo),my=Math.min(...la),My=Math.max(...la),cs=Math.cos(la[0]*Math.PI/180);
+  const w=(Mx-mx)*cs||1e-5,h=(My-my)||1e-5,s=Math.min((c.width-40)/w,(c.height-40)/h);
+  g.strokeStyle=getComputedStyle(document.body).color;g.lineWidth=4;g.lineJoin='round';g.beginPath();
+  pts.forEach((p,i)=>{const x=20+((p[1]-mx)*cs)*s,y=c.height-20-(p[0]-my)*s;i?g.lineTo(x,y):g.moveTo(x,y)});g.stroke();
+}
+$('#rc').onclick=()=>{
+  if(rec!=null){navigator.geolocation.clearWatch(rec);rec=null;$('#rc').textContent='Démarrer l\'enregistrement GPS';$('#rc').classList.remove('on');return}
+  pts=[];W('route',pts);$('#rc').textContent='Arrêter l\'enregistrement';$('#rc').classList.add('on');
+  rec=navigator.geolocation.watchPosition(p=>{pts.push([p.coords.latitude,p.coords.longitude,Date.now()]);W('route',pts);draw()},e=>{$('#rs').textContent='GPS : '+e.message},{enableHighAccuracy:true});
+};
+$('#gx').onclick=()=>{if(!pts.length)return;const x='<?xml version="1.0"?><gpx version="1.1" creator="Dash"><trk><trkseg>'+pts.map(p=>`<trkpt lat="${p[0]}" lon="${p[1]}"><time>${new Date(p[2]).toISOString()}</time></trkpt>`).join('')+'</trkseg></trk></gpx>';
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([x],{type:'application/gpx+xml'}));a.download='trajet.gpx';a.click()};
+draw();
+
+// ---------- Météo (Open-Meteo, gratuit, sans clé) ----------
+function wx(){
+  $('#wx').textContent='Localisation…';
+  navigator.geolocation.getCurrentPosition(async p=>{
+    try{
+      const r=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.coords.latitude}&longitude=${p.coords.longitude}&hourly=temperature_2m,precipitation_probability,cloud_cover,wind_gusts_10m&timezone=auto&forecast_days=2`)).json();
+      const h=r.hourly,now=new Date().toISOString().slice(0,13);let i=h.time.findIndex(t=>t.slice(0,13)>=now.slice(0,13));if(i<0)i=0;
+      $('#wx').innerHTML=[0,1,2].map(j=>i+j).map(n=>`<div class="c" style="margin-bottom:8px"><small>${h.time[n].slice(11,16)}</small><b>${Math.round(h.temperature_2m[n])} °C</b><small>Pluie ${h.precipitation_probability[n]} % · Nuages ${h.cloud_cover[n]} % · Rafales ${Math.round(h.wind_gusts_10m[n])} km/h</small></div>`).join('');
+    }catch(e){$('#wx').textContent='Météo indisponible (connexion ?)'}
+  },e=>$('#wx').textContent='Active la localisation : '+e.message);
+}
+$('#wr').onclick=wx;
+
+// ---------- Entretien ----------
+function maint(){
+  const t=S?S.total:null;if(t==null){$('#bn').textContent='Connecte-toi pour calculer.';return}
+  const used=(t-svc.b0)+svc.hard*.5,left=Math.max(0,100-used/20);
+  $('#bw').textContent=Math.round(left)+' %';$('#bwb').style.width=left+'%';
+  $('#bn').textContent=`${(t-svc.b0).toFixed(0)} km depuis le dernier changement · ${svc.hard} freinages brusques détectés`;
+  const nx=i=>(Math.ceil((t+.01)/i)*i-t).toFixed(0)+' km';
+  $('#mt').innerHTML=[['Vérifier vis et boulons',300],['Pression et usure des pneus',500],['Contrôle des freins',1000],['Entretien général',2000]].map(m=>`<div class="row"><span>${m[0]}</span><span>dans ~${nx(m[1])}</span></div>`).join('');
+}
+$('#bs').onclick=()=>{if(S){svc.b0=S.total;svc.hard=0;W('svc',svc);maint()}};
+
+// ---------- Effets de lumière ----------
+const fx={m:null,tg:'both',orig:null,sent:null,ts:0,beat:0,brk:0,iv:0};let mic=null;
+const fxUi=()=>$$('#fm button').forEach(x=>x.classList.toggle('on',x.dataset.m===fx.m));
+async function micOn(){try{
+  const st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}),a=new(window.AudioContext||window.webkitAudioContext)(),an=a.createAnalyser();
+  an.fftSize=512;a.createMediaStreamSource(st).connect(an);const d=new Uint8Array(an.frequencyBinCount);let avg=0,last=0;
+  mic={st,a,iv:setInterval(()=>{an.getByteFrequencyData(d);let e=0;for(let i=1;i<6;i++)e+=d[i];e/=5;const n=performance.now();if(e>55&&e>avg*1.35&&n-last>200){last=n;fx.beat=n+120}avg=avg*.92+e*.08},30)};return true;
+}catch(e){lg('Micro : '+e.message);alert('Micro refusé ou indisponible : '+e.message);return false}}
+function micOff(){if(mic){clearInterval(mic.iv);mic.st.getTracks().forEach(t=>t.stop());mic.a.close();mic=null}}
+async function startFx(m){
+  if(!S){alert('Connecte-toi d\'abord à la trottinette.');return}
+  if(m==='mus'&&!mic&&!(await micOn()))return;if(m!=='mus')micOff();
+  if(!fx.m)fx.orig={head:S.head,tail:S.tail};fx.m=m;fx.sent=null;clearInterval(fx.iv);fx.iv=setInterval(fxTick,40);fxUi();lg('Effet : '+m);
+}
+async function stopFx(quiet){
+  if(!fx.m)return;clearInterval(fx.iv);const o=fx.orig;fx.m=null;micOff();fxUi();
+  if(!quiet)for(let i=0;i<8&&S;i++){if(await send(P.frameWith(S,o)))break;await sleep(150)}
+}
+function fxTick(){
+  if(!fx.m)return;if(!S||!dev||!dev.gatt.connected){stopFx(true);return}
+  const n=performance.now(),v=Math.min(50,S.speed),o=fx.orig;let on=true;
+  switch(fx.m){
+    case'slow':on=n%1000<500;break;
+    case'strobe':on=n%240<120;break;
+    case'alt':on=n%600<300;break;
+    case'spd':{const q=Math.max(240,900-v*20);on=n%q<q/2;break}
+    case'brk':if(aNow<-2.5)fx.brk=n+1500;on=n<fx.brk?n%240<120:true;break;
+    case'mus':on=n<fx.beat;break;
+  }
+  let h=o.head,t=o.tail;const tg=fx.m==='brk'?'tail':fx.tg;
+  if(fx.m==='alt'){h=on?1:0;t=on?0:1}else{if(tg!=='tail')h=on?1:0;if(tg!=='head')t=on?1:0}
+  if((!fx.sent||fx.sent[0]!==h||fx.sent[1]!==t)&&n-fx.ts>110){fx.ts=n;send(P.frameWith(S,{head:h,tail:t})).then(ok=>{if(ok)fx.sent=[h,t]})}
+}
+$('#ft2').onclick=e=>{const b=e.target.closest('[data-tg]');if(!b)return;fx.tg=b.dataset.tg;$$('#ft2 button').forEach(x=>x.classList.toggle('on',x===b))};
+$('#fm').onclick=e=>{const b=e.target.closest('[data-m]');if(b)fx.m===b.dataset.m?stopFx():startFx(b.dataset.m)};
+$('#fo').onclick=()=>stopFx();
+
+// ---------- Klaxon du téléphone ----------
+let ac2;
+$('#hn').onclick=e=>{const b=e.target.closest('[data-k]');if(!b)return;const k=+b.dataset.k,a=ac2=ac2||new(window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain(),t=a.currentTime,f=o.frequency;
+  o.connect(g);g.connect(a.destination);o.type=k===1?'square':'sawtooth';
+  if(k===0)f.value=190;else if(k===1)f.value=900;else if(k===2){f.setValueAtTime(520,t);f.setValueAtTime(1,t+.3);f.setValueAtTime(520,t+.4)}else{f.setValueAtTime(500,t);f.linearRampToValueAtTime(1000,t+.5);f.linearRampToValueAtTime(500,t+1)}
+  g.gain.setValueAtTime(.6,t);g.gain.setTargetAtTime(0,t+.8,.05);o.start(t);o.stop(t+1.3)};
+
+
+// ---------- Pont vers le jeu 3D (3d/) ----------
+window.i9get=()=>S?Object.assign({age:Date.now()-last},S):null;
+window.i9cmd=k=>{if(!S||!(k in P.CMD))return;send(P.frame(S,P.CMD[k],!S[k]))};
+$('#g3').onclick=()=>{
+  if($('#v3'))return;
+  $('#g3s').textContent=S?'Trottinette connectée : la poignée pilote le jeu.':'Pas de trottinette connectée : tu peux jouer au clavier (ordinateur).';
+  const f=document.createElement('iframe');f.id='v3';f.src='jeu.html?embed=1';
+  f.allow='accelerometer; gyroscope; magnetometer; autoplay; fullscreen; geolocation';
+  f.style.cssText='position:fixed;inset:0;width:100%;height:100%;border:0;z-index:300;background:#000';
+  document.body.appendChild(f);
+};
+addEventListener('message',e=>{if(e.origin===location.origin&&e.data&&e.data.skkkrt3d==='exit'){const f=$('#v3');f&&f.remove()}});
+
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+<script src="game.js"></script>
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0b1220">
+  <title>SKKKRT3D</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Great+Vibes&family=Inter:wght@300;400;600;700&family=Orbitron:wght@400;600;800&family=Pirata+One&family=Press+Start+2P&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script>
+  /* Détecteur d'erreurs : affiche à l'écran ce qui empêche le jeu de démarrer (utile sur iPhone, sans console) */
+  (function () {
+    var box, dbg = /[?&]debug/.test(location.search); window.__errs = window.__errs || [];
+    function show(t, force) { try { window.__errs.push(t); if (!force && !dbg) return; if (!box) { box = document.createElement('pre'); box.style.cssText = 'position:fixed;left:0;right:0;top:0;max-height:30%;overflow:auto;margin:0;padding:8px;background:#7a0000;color:#fff;font:12px/1.35 monospace;z-index:99999;white-space:pre-wrap'; box.onclick = function () { box.style.display = 'none'; }; (document.body || document.documentElement).appendChild(box); } box.style.display = ''; box.textContent += t + '\n'; } catch (e) {} }
+    window.addEventListener('error', function (e) { var t = e.target; if (t && (t.src || t.href)) show('FICHIER NON CHARGÉ : ' + (t.src || t.href)); else show('ERREUR : ' + e.message + ' (' + (e.filename || '').split('/').pop() + ':' + e.lineno + ')'); }, true);
+    window.addEventListener('unhandledrejection', function (e) { show('ERREUR (promesse) : ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason)); });
+    window.__okSim = false;
+    setTimeout(function () { if (!window.__okSim) show('Le jeu n\u2019a pas démarré après 8 s : un fichier manque ou three.js (jsDelivr) est bloqué.\n' + window.__errs.slice(-6).join('\n'), true); }, 8000);
+  })();
+  </script>
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+  </script>
+</head>
+<body>
+  <video id="camv" playsinline muted autoplay></video>
+  <canvas id="c"></canvas>
+
+  <div id="hud" hidden>
+    <header>
+      <div class="brand"><b>SKKKRT</b><em>3D</em><i class="sk"><small>w4r3z</small></i></div>
+      <span id="st" class="chip">Déconnecté</span>
+      <span id="kbh" class="chip">Flèches ou WASD : conduire · Souris : regarder (clic) · Échap : menu · M : carte</span>
+      <div class="topbtns">
+        <button id="bVisor" class="ibtn" hidden aria-label="Visière" title="Visière : retirer / remettre">🥽</button>
+        <button id="bMenu" class="ibtn" aria-label="Menu / pause" title="Menu / pause (Échap)">☰</button>
+        <button id="bSet" class="ibtn" aria-label="Réglages">⚙</button>
+        <button id="bExit" class="ibtn" aria-label="Quitter" hidden>✕</button>
+      </div>
+    </header>
+
+    <div id="wanted" hidden aria-label="Étoiles de recherche"></div>
+    <div id="fps" hidden></div>
+    <div id="log"></div>
+
+    <div id="gaugebox">
+      <svg id="gauge" viewBox="0 0 200 118" aria-hidden="true">
+        <defs><linearGradient id="gg" x1="0" x2="1"><stop offset="0" stop-color="var(--ac)"/><stop offset="1" stop-color="#ff4d4d"/></linearGradient></defs>
+        <path class="tk" d="M12 106A88 88 0 0 1 188 106" pathLength="100"/>
+        <path id="arc" d="M12 106A88 88 0 0 1 188 106" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/>
+      </svg>
+      <div id="sp">0.0</div>
+      <div id="un">km/h</div>
+    </div>
+
+    <div id="joy" hidden aria-label="Joystick tactile"><div id="joyknob"></div></div>
+
+    <div id="meta">
+      <span id="mble" class="chip">BLE</span>
+      <span id="mgyro" class="chip">Gyro</span>
+      <span id="mbat" class="chip">Batterie --</span>
+      <span id="mgear" class="chip">Mode --</span>
+      <span id="mlane" class="chip">Piste cyclable</span>
+      <span id="mslope" class="chip" hidden>Pente</span>
+      <span id="mdist" class="chip">0.00 km</span>
+    </div>
+
+    <div id="fhud" hidden>
+      <div class="gstats"><span id="fpts" class="chip big">⭐ 0</span><span id="fses" class="chip">🪙 0</span></div>
+      <div id="fpop"></div>
+    </div>
+
+    <div id="ghud" hidden>
+      <div class="gstats">
+        <span id="gtime" class="chip big">⏱ 0:00</span>
+        <span id="gscore" class="chip big">⭐ 0</span>
+        <span id="gflags" class="chip">🚩 0/0</span>
+        <span id="gcoins" class="chip">🪙 0</span>
+      </div>
+      <div id="gtarget" class="chip" hidden>
+        <svg id="garrow" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 3 L33 35 L20 28 L7 35 Z"/></svg>
+        <span id="gdist">—</span>
+      </div>
+    </div>
+
+    <div id="steer"><i id="sn"></i></div>
+
+    <div id="dock">
+      <button id="cn">🔗 Connecter i9</button>
+      <button id="gy">🧭 Autoriser gyro</button>
+      <button id="cal">🎯 Calibrer guidon</button>
+      <button id="hl">💡 Phare</button>
+      <button id="ng">🚩 Nouvelle partie</button>
+      <button id="mu">🎵 Musique : ON</button>
+    </div>
+
+    <div id="cmp" hidden></div>
+
+    <canvas id="rose" width="104" height="104"></canvas>
+    <canvas id="mm" width="264" height="264"></canvas>
+    <a id="osmCredit" hidden href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>
+  </div>
+
+  <div id="gate">
+    <div class="box">
+      <div class="logo"><b>SKKKRT</b><em>3D</em></div>
+      <p class="tag">Simulateur de trottinette électrique — iScooter i9</p>
+      <h4>Monde</h4>
+      <div id="gWorlds" class="worlds"></div>
+      <div id="gImagRow"><p class="hint">🏙 Ville imaginaire (saison, jour/soir/nuit et néon réglables plus bas) : routes courbes, bâtiments au hasard, piétons, voitures et cyclistes. La même ville revient à chaque visite tant que tu n’en demandes pas une autre.</p><button id="gNewCity" class="ghost" type="button">🎲 Nouvelle ville aléatoire</button></div>
+      <div id="gRealRow" hidden><p class="hint">📍 Vraie carte OpenStreetMap autour de ta position GPS (GPS requis; Internet au premier téléchargement). Les premières routes arrivent en premier, le reste se complète pendant le jeu et les zones visitées restent en mémoire.</p><div id="gRadius"></div><button id="gRecenter" class="ghost" type="button" style="margin-top:6px">📍 Recharger la carte à ma position</button></div>
+      <h4>Saison · moment · lumière <small style="text-transform:none;letter-spacing:0">(ville imaginaire et carte réelle)</small></h4>
+      <div id="gRealTheme"></div>
+      <h4>Vue</h4>
+      <div id="gView"></div>
+      <h4>Jeu</h4>
+      <div id="gMode"></div>
+      <div id="gDiffRow"><div id="gDiff" style="margin-top:6px"></div></div>
+      <p class="hint" id="gBest"></p>
+      <p class="hint">Capture tous les drapeaux 🚩 avant la fin du chrono. Les pièces dorées 🪙 donnent des points (+10, grosse pièce +50). Un bâtiment, un arbre, un véhicule, un piéton ou un cycliste = chute (−30 / −20 points).</p>
+      <ol id="steps">
+        <li>Cale la i9 sur le rack, roue arrière libre, téléphone sur le guidon.</li>
+        <li>Autorise le gyro, puis <b>Calibrer guidon</b> guidon bien droit.</li>
+        <li>Connecte la i9 (Bluefy / Chrome) : la poignée donne la vitesse.</li>
+      </ol>
+      <p class="hint">Sans trottinette : flèches <i>ou</i> W A S D = accélérer, freiner, tourner · souris = regarder tout autour (clique sur l’écran pour la capturer) · Échap = menu / pause · M = mini-carte · L phare · R retour au départ · G nouvelle partie.</p>
+      <button id="go" class="primary">Entrer dans la ville</button>
+      <button id="gSet" class="ghost">⚙ Tous les réglages</button>
+      <p class="note">Bluetooth et gyro exigent HTTPS. iPhone : ouvre cette page dans Bluefy.</p>
+    </div>
+  </div>
+
+  <div id="gpop"></div>
+  <div id="gbanner" hidden></div>
+  <div id="flash"></div>
+  <div id="results" hidden>
+    <div class="box">
+      <h2 id="rTitle"></h2>
+      <div id="rRows"></div>
+      <button id="rAgain" class="primary">Rejouer</button>
+      <button id="rFree" class="ghost">Balade libre</button>
+    </div>
+  </div>
+
+  <div id="wxTint"></div><div id="visor" hidden><canvas id="vcv"></canvas></div><div id="bolt"></div><canvas id="confetti"></canvas>
+  <div id="pause" hidden>
+    <div class="box">
+      <h2>⏸ Pause</h2>
+      <button id="pResume" class="primary" type="button">▶ Reprendre</button>
+      <button id="pSet" class="ghost" type="button">⚙ Réglages (saison, moment, néon, vue…)</button>
+      <button id="pHome" class="ghost" type="button">🏠 Écran d’accueil (changer de monde, de vue, de jeu)</button>
+      <button id="pNew" class="ghost" type="button">🚩 Nouvelle partie</button>
+      <button id="pExit" class="ghost" type="button" hidden>✕ Quitter vers l’app</button>
+      <p class="hint">Échap ou P : pause · M : mini-carte · R : retour au départ · C : calibrer</p>
+    </div>
+  </div>
+  <aside id="panel" hidden></aside>
+  <div id="veil" hidden><span>Chargement du monde…</span></div>
+
+  <script src="proto.js"></script>
+  <script type="module" src="sim.js"></script>
+</body>
+</html>
