@@ -18,13 +18,15 @@ function segCross(a, b, c, d) {                     // les segments ab et cd se 
   return (d1 > 0) !== (d2 > 0) && (d3 > 0) !== (d4 > 0);
 }
 
-export function generateCityJSON(seed, half = 400) {
+export function generateCityJSON(seed, half = 400, preset = 'city') {
   const R = rngOf(seed * 2654435761 + 12345);
   for (let i = 0; i < 6; i++) R();
   const rr = (a, b) => a + (b - a) * R();
+  if (!['city', 'skate', 'mountain', 'f1', 'snow'].includes(preset)) preset = 'city';
 
   /* ---------------------------------------------------------------- 1. nœuds de carrefour (grille déformée) */
-  const S = rr(88, 106), N = Math.floor((half - 60) / S), pts = new Map(), nodes = [];
+  const span = preset === 'city' ? [88, 106] : preset === 'skate' ? [112, 130] : preset === 'f1' ? [126, 148] : [118, 140];
+  const S = rr(span[0], span[1]), N = Math.floor((half - 60) / S), pts = new Map(), nodes = [];
   const jit = S * 0.22;
   for (let i = -N; i <= N; i++) for (let j = -N; j <= N; j++) {
     const x = i * S + rr(-jit, jit), z = j * S + rr(-jit, jit);
@@ -57,7 +59,7 @@ export function generateCityJSON(seed, half = 400) {
 
   /* ---------------------------------------------------------------- 2. routes courbes (échantillonnées tous les ~8 m) */
   const placed = [];                                              // arêtes déjà tracées (pour éviter les croisements)
-  const cls = () => { const r = R(); return r < 0.56 ? 'residential' : r < 0.84 ? 'tertiary' : 'cycleway'; };
+  const cls = () => { const r = R(); if (preset === 'skate') return r < 0.78 ? 'cycleway' : 'residential'; if (preset === 'f1') return r < 0.72 ? 'tertiary' : 'secondary'; if (preset === 'mountain' || preset === 'snow') return r < 0.78 ? 'cycleway' : 'tertiary'; return r < 0.56 ? 'residential' : r < 0.84 ? 'tertiary' : 'cycleway'; };
   let nid = 1000;
   const nodeOf = new Map();                                       // carrefour -> id de nœud
   const nidFor = n => { if (!nodeOf.has(n.id)) nodeOf.set(n.id, nid++); return nodeOf.get(n.id); };
@@ -80,7 +82,8 @@ export function generateCityJSON(seed, half = 400) {
     }
     if (bad) continue;
     const c = cls();
-    const rec = { a: e.a, b: e.b, P, cls: c }; placed.push(rec);
+    const bridge = (preset === 'city' || preset === 'mountain') && Math.abs(e.a.z - e.b.z) < 18 && Math.min(e.a.x, e.b.x) < -20 && Math.max(e.a.x, e.b.x) > 20;
+    const rec = { a: e.a, b: e.b, P, cls: c, bridge }; placed.push(rec);
     e.a.deg++; e.b.deg++;
   }
   // un carrefour ne doit pas n'avoir que des pistes cyclables : au moins une vraie route
@@ -102,7 +105,7 @@ export function generateCityJSON(seed, half = 400) {
     // échantillons intermédiaires plus serrés pour que les tests de distance soient fiables
     for (let k = 0; k < r.P.length - 1; k++) addSample((r.P[k][0] + r.P[k + 1][0]) / 2, (r.P[k][1] + r.P[k + 1][1]) / 2, hw);
     r.hw = hw; r.ids = ids;
-    els.push({ type: 'way', id: wid++, nodes: ids, geometry: r.P.map(p => ll(p[0], p[1])), tags: { highway: r.cls } });
+    els.push({ type: 'way', id: wid++, nodes: ids, geometry: r.P.map(p => ll(p[0], p[1])), tags: Object.assign({ highway: r.cls }, r.bridge ? { bridge: 'yes', layer: '1' } : {}) });
   }
   const nearRoad = (x, z, pad) => {                               // distance au bord de route le plus proche < pad ?
     const cx = Math.floor(x / SK), cz = Math.floor(z / SK), need = Math.ceil((pad + 14) / SK);
@@ -135,7 +138,7 @@ export function generateCityJSON(seed, half = 400) {
     }
     return false;
   };
-  const nPark = 3 + Math.floor(R() * 2), nPond = 2 + Math.floor(R() * 2), nWood = 2 + Math.floor(R() * 2);
+  const nPark = preset === 'skate' ? 5 : 3 + Math.floor(R() * 2), nPond = preset === 'snow' ? 0 : preset === 'mountain' ? 4 : 2 + Math.floor(R() * 2), nWood = preset === 'mountain' ? 8 : preset === 'snow' ? 10 : preset === 'skate' ? 6 : 2 + Math.floor(R() * 2);
   for (let i = 0; i < nPark; i++) makeBlob('park', 24, 36);
   for (let i = 0; i < nPond; i++) makeBlob('water', 12, 22);
   for (let i = 0; i < nWood; i++) makeBlob('wood', 22, 34);
@@ -149,7 +152,7 @@ export function generateCityJSON(seed, half = 400) {
     for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) { const g = bgrid.get((cx + a) + ',' + (cz + b)); if (g) for (const o of g) if (Math.hypot(o.x - x, o.z - z) < (o.r + r) * 0.8) return false; }
     return true;
   };
-  const inBlob = (x, z, r) => blobs.some(b => Math.hypot(b.x - x, b.z - z) < b.r + r);
+  const inBlob = (x, z, r) => blobs.some(b => Math.hypot(b.x - x, b.z - z) < b.r + r) || ((preset === 'city' || preset === 'mountain') && Math.abs(x) < 16 + r);
   let bid = 900000;
   const tryBuilding = (cx, cz, w, d, ang) => {
     const r = Math.hypot(w, d) / 2;
@@ -187,7 +190,7 @@ export function generateCityJSON(seed, half = 400) {
   for (const r of placed) {
     const P = r.P, cum = [0]; for (let k = 1; k < P.length; k++) cum.push(cum[k - 1] + Math.hypot(P[k][0] - P[k - 1][0], P[k][1] - P[k - 1][1]));
     const total = cum[cum.length - 1];
-    if (r.cls === 'cycleway') continue;
+    if (r.cls === 'cycleway' || ['skate', 'mountain', 'snow'].includes(preset)) continue;
     const at = s => {
       let k = 1; while (k < cum.length - 1 && cum[k] < s) k++;
       const t = (s - cum[k - 1]) / ((cum[k] - cum[k - 1]) || 1), x = P[k - 1][0] + (P[k][0] - P[k - 1][0]) * t, z = P[k - 1][1] + (P[k][1] - P[k - 1][1]) * t;
@@ -207,17 +210,74 @@ export function generateCityJSON(seed, half = 400) {
     }
   }
   // (b) bâtiments dispersés à l'intérieur des îlots, orientés au hasard
-  for (let t = 0; t < 1400; t++) {
+  const scatter = preset === 'city' ? 1400 : preset === 'f1' ? 230 : preset === 'skate' ? 70 : 35;
+  for (let t = 0; t < scatter; t++) {
     const w = rr(8, 17), d = rr(8, 14), cx = rr(-half + 50, half - 50), cz = rr(-half + 50, half - 50);
     tryBuilding(cx, cz, w, d, R() * Math.PI);
+  }
+  const addCourse = (coords, highway, extra = {}) => {
+    const geometry = coords.map(p => ll(p[0], p[1]));
+    if (coords.length > 2 && Math.hypot(coords[0][0] - coords[coords.length - 1][0], coords[0][1] - coords[coords.length - 1][1]) > 0.2) geometry.push(geometry[0]);
+    els.push({ type: 'way', id: wid++, geometry, tags: Object.assign({ highway, name: extra.name || 'Parcours imaginaire' }, extra) });
+  };
+  const oval = (cx, cz, rx, rz, count, ripple = 0) => {
+    const pts = [];
+    for (let i = 0; i < count; i++) {
+      const a = i / count * Math.PI * 2, r = 1 + ripple * Math.sin(a * 5 + 0.7);
+      pts.push([cx + Math.cos(a) * rx * r, cz + Math.sin(a) * rz * r]);
+    }
+    return pts;
+  };
+  if (preset === 'city' || preset === 'mountain') {
+    const a = [], b = [], count = 48;
+    for (let i = 0; i <= count; i++) {
+      const z = -half + 28 + i * (2 * half - 56) / count;
+      const center = 18 * Math.sin(z / 105);
+      a.push([center - 10, z]); b.push([center + 10, z]);
+    }
+    const river = a.concat(b.reverse()); river.push(river[0]);
+    els.push({ type: 'way', id: wid++, geometry: river.map(p => ll(p[0], p[1])), tags: { natural: 'water', water: 'river', name: 'Rivière' } });
+  }
+  if (preset === 'skate') {
+    addCourse(oval(0, 0, 74, 48, 96, 0.09), 'cycleway', { name: 'Boucle de skatepark', surface: 'concrete' });
+    addCourse(oval(0, 0, 49, 29, 72, 0.07), 'cycleway', { name: 'Pump track', surface: 'concrete' });
+    addCourse(oval(0, 0, 24, 15, 56, 0.05), 'cycleway', { name: 'Mini-boucle', surface: 'concrete' });
+  }
+  if (preset === 'mountain') {
+    const trail = [];
+    for (let i = 0; i <= 64; i++) { const x = -half + 35 + i * (2 * half - 70) / 64; trail.push([x, 150 * Math.sin(x / 94) + 42 * Math.sin(x / 37)]); }
+    addCourse(trail, 'cycleway', { name: 'Sentier des crêtes', surface: 'gravel' });
+  }
+  if (preset === 'f1') {
+    const track = oval(35, 0, 275, 205, 144, 0.045);
+    addCourse(track, 'secondary', { name: 'Circuit de course' });
+    addCourse([[35, -205], [5, -175], [65, -145], [20, -110], [60, -78]], 'tertiary', { name: 'Chicane' });
+  }
+  if (preset === 'snow') {
+    const track = oval(-15, 0, 285, 225, 150, 0.11);
+    addCourse(track, 'cycleway', { name: 'Piste de motoneige', surface: 'snow' });
+    const trail = [];
+    for (let i = 0; i <= 46; i++) { const x = -half + 25 + i * (2 * half - 50) / 46; trail.push([x, 105 * Math.sin(x / 83) + 30 * Math.sin(x / 31)]); }
+    addCourse(trail, 'cycleway', { name: 'Sentier enneigé', surface: 'snow' });
   }
   return { elements: els, half, nBuildings: bs.length };
 }
 
+function syntheticHeight(preset, seed) {
+  const phase = ((seed >>> 0) % 4096) / 4096 * Math.PI * 2;
+  if (preset === 'mountain') return (x, z) => 15 * Math.sin(x / 132 + phase) + 8 * Math.sin(z / 86 - phase) + 18 * Math.exp(-(((x + 105) ** 2) / 46000 + ((z - 30) ** 2) / 98000));
+  if (preset === 'snow') return (x, z) => 6 * Math.sin(x / 155 + phase) + 4 * Math.cos(z / 130 - phase) + 3 * Math.sin((x + z) / 210);
+  if (preset === 'f1') return (x, z) => 1.5 * Math.sin(x / 150 + phase) + 1.2 * Math.cos(z / 170 - phase);
+  if (preset === 'skate') return (x, z) => 1.3 * Math.sin(x / 95 + phase) + 1.1 * Math.cos(z / 90 - phase) + 2 * Math.exp(-((x * x + z * z) / 18000));
+  return (x, z) => 2.2 * Math.sin(x / 92 + phase) + 1.7 * Math.cos(z / 118 - phase) - 9 * Math.exp(-(x * x / 430 + z * z / 90000));
+}
+
 // ville prête à jouer : même structure que la carte réelle
-export function makeCity(seed, tri, half = 400) {
-  const j = generateCityJSON(seed, half);
+export function makeCity(seed, tri, half = 400, preset = 'city') {
+  const j = generateCityJSON(seed, half, preset);
   const D = parseOSM(j, LAT0, LON0, tri, half);
-  D.synthetic = true; D.me = [0, 0]; D.heading = null; D.seed = seed;
+  D.synthetic = true; D.me = [0, 0]; D.heading = null; D.seed = seed; D.preset = preset;
+  D.syntheticHeight = syntheticHeight(preset, seed);
+  D.syntheticHmin = preset === 'mountain' ? -38 : preset === 'city' ? -16 : preset === 'snow' ? -16 : -8;
   return D;
 }

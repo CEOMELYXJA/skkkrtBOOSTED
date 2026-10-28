@@ -259,7 +259,7 @@ function bannerTex(th) {
   g.fillStyle = '#ff9f1c'; g.font = 'bold 70px Orbitron, Inter, Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillText('SKKKRT3D', 256, 56);
   g.fillStyle = '#e6ecf5'; g.font = '600 22px Inter, Arial, sans-serif';
-  g.fillText('i9 · piste cyclable →', 256, 104);
+  g.fillText('Scooter · piste cyclable →', 256, 104);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANI();
   return t;
 }

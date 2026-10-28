@@ -217,8 +217,9 @@ function swapFull(now) {                                           // remplace l
 }
 // ville imaginaire : générée à partir d'un numéro (settings.seed) ; la même ville revient tant qu'on n'en demande pas une autre
 let cityCache = null;
-function cityFor(seed) {
-  if (!cityCache || cityCache.seed !== seed) cityCache = { seed, D: makeCity(seed, tri) };
+function cityFor(seed, preset) {
+  const key = String(seed) + ':' + preset;
+  if (!cityCache || cityCache.key !== key) cityCache = { key, D: makeCity(seed, tri, 400, preset) };
   return cityCache.D;
 }
 async function ensureRelief(D) {                                  // altitudes réelles (une fois par carte)
@@ -272,10 +273,10 @@ function rebuildWorld(done) {
     } else {
       setVeil('Création de la ville…');
       await new Promise(r => setTimeout(r, 30));
-      real = cityFor(settings.seed); synth = true; theme = composeTheme(settings.season, settings.tod, settings.glow);
+      real = cityFor(settings.seed, settings.preset); synth = true; theme = composeTheme(settings.preset === 'snow' ? 'winter' : settings.season, settings.tod, settings.glow);
     }
     if (id !== buildId) return;
-    if (synth) { real.H = null; real.Hmin = 0; }
+    if (synth) { real.H = real.syntheticHeight || null; real.Hmin = real.syntheticHmin || 0; }
     else { if (!real.elev && reliefState.e) real.elev = reliefState.e; const k = +settings.relief || 0; real.H = real.elev && k > 0 ? (x, z) => real.elev.fn(x, z) * k : null; real.Hmin = real.elev ? real.elev.min * k : 0; }
     if (world) world.dispose();
     world = createWorld(scene, theme, settings.quality, real);
@@ -338,7 +339,7 @@ window.__gentle = () => { try { return !!(T && T.connected && T.connected()); } 
 const T = createTelemetry({
   log, setStatus,
   onLink: ok => {
-    $('#cn').textContent = ok ? '🔗 Déconnecter' : '🔗 Connecter i9';
+    $('#cn').textContent = ok ? '🔗 Déconnecter' : '🔗 Connecter le scooter';
     $('#mble').textContent = ok ? 'BLE connecté' : 'BLE';
     $('#mble').className = 'chip' + (ok ? ' ok' : '');
   }
@@ -346,7 +347,7 @@ const T = createTelemetry({
 const EMBED = T.embedded || new URLSearchParams(location.search).has('embed');
 if (EMBED) {
   $('#cn').hidden = true; $('#bExit').hidden = false;
-  $('#steps').innerHTML = '<li>Connecte ta i9 dans l’onglet <b>Tableau</b> de l’app (la connexion est partagée).</li><li>Autorise le gyro puis <b>Calibrer guidon</b> guidon droit.</li><li>La poignée donne la vitesse, le guidon tourne le monde.</li>';
+  $('#steps').innerHTML = '<li>Connecte ta trottinette dans l’onglet <b>Tableau</b> de l’app (la connexion est partagée).</li><li>Autorise le gyro puis <b>Calibrer guidon</b> guidon droit.</li><li>La poignée donne la vitesse, le guidon tourne le monde.</li>';
   $('#bExit').onclick = () => parent.postMessage({ skkkrt3d: 'exit' }, '*');
 }
 
@@ -355,10 +356,10 @@ let linkOk = null;
 function syncLink() {
   const ok = !!T.connected();
   if (ok === linkOk) return; linkOk = ok;
-  setStatus(ok ? 'i9 connectée ✓' : 'Déconnecté');
+  setStatus(ok ? 'Scooter connecté ✓' : 'Déconnecté');
   $('#mble').textContent = ok ? 'BLE connecté' : 'BLE'; $('#mble').className = 'chip' + (ok ? ' ok' : '');
   const li = EMBED && $('#steps li');
-  if (li) li.innerHTML = ok ? '✅ <b>i9 connectée</b> via l’onglet Tableau : la poignée pilote le jeu.' : 'Connecte ta i9 dans l’onglet <b>Tableau</b> de l’app (la connexion est partagée).';
+  if (li) li.innerHTML = ok ? '✅ <b>Trottinette connectée</b> via l’onglet Tableau : la poignée pilote le jeu.' : 'Connecte ta trottinette dans l’onglet <b>Tableau</b> de l’app (la connexion est partagée).';
 }
 setInterval(syncLink, 400); syncLink();
 
@@ -811,7 +812,7 @@ onChange(k => {
   if (all || k === 'quality') applyQuality();
   if (k === 'world' && reloading) { reloading = false; paused = false; centerOverride = null; }      // rechargement interrompu (carte impossible)
   if (k === 'world' && settings.world === 'real') realData = null;      // on entre dans le monde réel : on relit ta position GPS
-  if (all || k === 'world' || k === 'quality' || ['season', 'tod', 'glow'].includes(k)) rebuildWorld();
+  if (all || k === 'world' || k === 'quality' || ['season', 'tod', 'glow'].includes(k) || (k === 'preset' && settings.world !== 'real')) rebuildWorld();
   if (k === 'relief' && settings.world === 'real') rebuildWorld();
   if (k === 'mapRadius') { realData = null; if (settings.world === 'real') rebuildWorld(); }
   if (all || k === 'fov') { camera.fov = settings.fov; camera.updateProjectionMatrix(); }
@@ -843,7 +844,7 @@ function copyText(t) {
 buildPanel(panel, { sessionReport: () => { const t = SL.report(); copyText(t).then(ok => log(ok ? '📋 Rapport copié (' + SL.count() + ' partie(s), ' + Math.round(t.length / 1024) + ' Ko) : colle-le dans la conversation.' : 'Copie impossible ici : ouvre le jeu seul (sans l’app) et réessaie.')); },
   sessionClear: () => { SL.clear(); log('Journal des parties effacé.'); },
   rideStats: () => { const st = rides.stats(), t = free.totals(); log('Trajets : ' + st.rides + ' · ' + st.km + ' km · ' + st.favs + ' endroits favoris · points à vie : ' + t.pts + ' (' + t.coins + ' pièces, ' + t.rings + ' anneaux, ' + t.flags + ' drapeaux)'); }, clearRides: () => { rides.clear(); _favC = null; log('Historique des trajets effacé.'); }, clearFree: () => { free.clearTotals(); log('Points de la balade libre remis à zéro.'); }, close: () => closePanel(), calibrate, home: goHome, recenter, newCity, clearBest: () => { game.clearBest(); $('#gBest').textContent = game.bestLine(); log('Records effacés.'); } });
-worldPicker($('#gWorlds')); { const el = $('#gRealTheme'); for (const [k, o] of [['season', [['summer', '☀️ Été'], ['winter', '❄️ Hiver'], ['spring', '🌱 Printemps'], ['autumn', '🍂 Automne']]], ['tod', [['day', '🌞 Jour'], ['dusk', '🌇 Soir'], ['night', '🌙 Nuit']]], ['glow', [['normal', 'Lumière discrète'], ['neon', '🌈 Néon']]]]) { const d = document.createElement('div'); el.append(d); segment(d, k, o); } } segment($('#gView'), 'view', [['fp', '1re personne'], ['tp', '2e personne']]);
+worldPicker($('#gWorlds')); segment($('#gPreset'), 'preset', [['city', '🏙 Ville + pont'], ['skate', '🛹 Skatepark'], ['mountain', '⛰ Sentier montagne'], ['f1', '🏎 Circuit F1'], ['snow', '❄️ Motoneige']]); { const el = $('#gRealTheme'); for (const [k, o] of [['season', [['summer', '☀️ Été'], ['winter', '❄️ Hiver'], ['spring', '🌱 Printemps'], ['autumn', '🍂 Automne']]], ['tod', [['day', '🌞 Jour'], ['dusk', '🌇 Soir'], ['night', '🌙 Nuit']]], ['glow', [['normal', 'Lumière discrète'], ['neon', '🌈 Néon']]]]) { const d = document.createElement('div'); el.append(d); segment(d, k, o); } } segment($('#gView'), 'view', [['fp', '1re personne'], ['tp', '2e personne']]);
 segment($('#gMode'), 'gameMode', [['ctf', '🚩 Capture de drapeaux'], ['free', 'Balade libre']]);
 segment($('#gRadius'), 'mapRadius', [['800', '800 m (rapide)'], ['1500', '1,5 km (élargi)']]);
 segment($('#gDiff'), 'difficulty', [['easy', 'Facile'], ['med', 'Moyen'], ['hard', 'Difficile']]);
@@ -1079,7 +1080,7 @@ function frame(now) {
     else if (kDown() || keys.Space || jy < -0.25) target = Math.max(0, v - (X.slip ? 5 : 9) * dt);
     else target = Math.max(0, v - (0.8 + 0.12 * v) * dt);           // roue libre
   } else target = Math.max(0, state.speed - 1.6 * dt);
-  if (ride.locked && !tel) target = gpsSpeed();                      // roule pour vrai sans la i9 connectée : la vitesse vient du GPS
+  if (ride.locked && !tel) target = gpsSpeed();                      // roule pour vrai sans le scooter connecté : la vitesse vient du GPS
   const prev = state.speed;
   state.speed += (target - state.speed) * (kbDirect ? 1 : Math.min(1, dt * 6));
   state.brake = (prev - state.speed) / Math.max(dt, 0.001) > 2.2 || (kbActive && (kDown() || keys.Space || jy < -0.25));

@@ -50,6 +50,8 @@ export function buildPanel(root, cb) {
   const body = h('div', 'pbody'); root.append(body);
 
   let g = group(body, 'Monde'); const wp = h('div', 'worlds'); g.append(wp); worldPicker(wp);
+  g.append(h('label', 'lbl', 'Parcours de la ville imaginaire'));
+  const presetRow = h('div'); g.append(presetRow); segment(presetRow, 'preset', [['city', '🏙 Ville + pont'], ['skate', '🛹 Skatepark'], ['mountain', '⛰ Sentier montagne'], ['f1', '🏎 Circuit F1'], ['snow', '❄️ Motoneige']]);
   g.append(h('label', 'lbl', 'Saison (ville imaginaire et carte réelle)'));
   const rs = h('div'); g.append(rs); segment(rs, 'season', [['summer', '☀️ Été'], ['winter', '❄️ Hiver'], ['spring', '🌱 Printemps'], ['autumn', '🍂 Automne']]);
   g.append(h('label', 'lbl', 'Moment de la journée'));
@@ -160,7 +162,7 @@ export function buildPanel(root, cb) {
   toggle(g, 'Inverser le guidon', 'steerInvert');
   range(g, 'Échelle de vitesse', 'speedScale', 0.5, 2.5, 0.05, x => '×' + x.toFixed(2));
   const cal = h('button', 'btn', 'Calibrer le guidon (droit)'); cal.type = 'button'; cal.onclick = cb.calibrate; g.append(cal);
-  toggle(g, 'Clavier toujours actif, même avec la i9 (flèches ou W A S D = conduire ; souris = regarder partout ; sans i9 il est déjà actif)', 'kbAlways');
+  toggle(g, 'Clavier toujours actif, même avec le scooter (flèches ou W A S D = conduire ; souris = regarder partout ; sans scooter il est déjà actif)', 'kbAlways');
   const home = h('button', 'btn', 'Retour au départ'); home.type = 'button'; home.onclick = cb.home; g.append(home);
 
   g = group(body, 'Affichage');

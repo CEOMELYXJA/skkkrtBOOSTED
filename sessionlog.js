@@ -33,7 +33,7 @@ export function createSessionLog(settings) {
   function frame(dt, playing, bleNow) {
     const now = Date.now();
     if (bleNow !== bleOn) {                                           // le Bluetooth vient de se connecter ou de se couper
-      if (bleOn !== null) { note('ble', bleNow ? 'i9 connectée' : 'i9 coupée' + (bleT ? ' après ' + Math.round((now - bleT) / 1000) + ' s' : '')); if (!bleNow) S.ble.drops++; }
+      if (bleOn !== null) { note('ble', bleNow ? 'scooter connecté' : 'scooter déconnecté' + (bleT ? ' après ' + Math.round((now - bleT) / 1000) + ' s' : '')); if (!bleNow) S.ble.drops++; }
       bleOn = bleNow; bleT = bleNow ? now : 0;
     }
     if (bleNow) S.ble.up += dt;

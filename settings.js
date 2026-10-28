@@ -18,6 +18,7 @@ export const FONTS = [
 export const DEFAULTS = {
   world: 'day',
   seed: 0,             // numéro de la ville imaginaire (0 = à tirer au hasard une fois)
+  preset: 'city',      // parcours imaginaire : city | skate | mountain | f1 | snow
   mapRadius: '800',    // carte réelle : demi-côté en mètres (zone locale pour limiter le téléchargement initial)
   mapV: 1,             // migration : revient une fois de la zone 6 km qui lançait plus de 200 requêtes
   realTheme: 'day',    // (ancien réglage, remplacé par saison / moment / lumière)
@@ -77,7 +78,7 @@ export const DEFAULTS = {
   roadMarks: true,     // lignes de route et passages piétons
   sidewalks: true,     // trottoirs le long des rues
   roofs: true,         // toits en pente et cheminées sur les maisons
-  kbAlways: false,     // clavier (flèches ET W A S D / Z Q S D = conduire) actif même quand la i9 est connectée (sinon : seulement sans i9)
+  kbAlways: false,     // clavier (flèches ET W A S D / Z Q S D = conduire) actif même quand le scooter est connecté (sinon : seulement sans scooter)
   viewOpacity: 100,    // opacité de la vue 3D en % : en dessous de 100, la caméra arrière du téléphone apparaît derrière (réalité augmentée)
   rideLog: true,       // enregistrer chaque trajet (sur l'appareil) : endroits favoris + précision qui s'améliore
   streetLamps: true,   // lampadaires le long des rues (carte réelle)
