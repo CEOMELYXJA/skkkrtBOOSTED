@@ -345,6 +345,31 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
     const endX = x + s * length / 2, endZ = z + c * length / 2;
     return { endX, endZ, endY: groundY(endX, endZ) + baseOffset + height };
   };
+  const makeDeckSlope = (x, z, width, length, height, angle, topMat, sideMat) => {
+    const c = Math.cos(angle), s = Math.sin(angle), segments = 20, topVertices = [], topUv = [], topIndices = [], sideVertices = [], sideIndices = [];
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments, lz = (t - 0.5) * length, rise = height * (0.5 - 0.5 * Math.cos(2 * Math.PI * t));
+      for (const lx of [-width / 2, width / 2]) {
+        const wx = x + c * lx + s * lz, wz = z - s * lx + c * lz, base = deckY(wx, wz) + 0.07;
+        topVertices.push(lx, base + rise, lz); topUv.push((lx + width / 2) / width, t * 3);
+      }
+      for (const side of [-1, 1]) {
+        const lx = side * width / 2, wx = x + c * lx + s * lz, wz = z - s * lx + c * lz, base = deckY(wx, wz) + 0.06;
+        sideVertices.push(lx, base, lz, lx, base + rise, lz);
+        if (i < segments) { const a = i * 4 + (side < 0 ? 0 : 2); sideIndices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+      }
+      if (i < segments) { const a = i * 2; topIndices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    }
+    const buildStrip = (vertices, indices, uv, material) => {
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+      if (uv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(indices); geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, material); mesh.position.set(x, 0, z); mesh.rotation.y = angle; mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
+    };
+    buildStrip(topVertices, topIndices, topUv, topMat);
+    buildStrip(sideVertices, sideIndices, null, sideMat);
+    rampDefs.push({ x, z, width, length, height, angle, baseOffset: 0.07, deck: true, hump: true });
+  };
   if (preset === 'mountain') {
     const trail = [[0,0],[28,-44],[62,-82],[94,-116],[130,-128],[166,-95],[202,-46],[236,6],[265,55],[236,96],[198,130],[154,156],[112,142],[72,106],[35,65],[0,22]];
     const nearestTrail = (x, z) => {
@@ -358,10 +383,10 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
     };
     // Forêt décorative en quatre lots instanciés, sans arbre ni collision dans le couloir du sentier.
     const capacity = lowPowerMountain
-      ? ({ low: 700, med: 1350, high: 1900, ultra: 2400 })[quality] || 1100
-      : ({ low: 2400, med: 4200, high: 6200, ultra: 8400 })[quality] || 4200;
-    const density = lowPowerMountain ? 0.38 : (({ low: 0.23, med: 0.43, high: 0.62, ultra: 0.84 })[quality] || 0.43);
-    const treeStep = lowPowerMountain ? 12.6 : 9.8;
+      ? ({ low: 300, med: 480, high: 620, ultra: 760 })[quality] || 420
+      : ({ low: 1000, med: 1700, high: 2400, ultra: 3200 })[quality] || 1700;
+    const density = lowPowerMountain ? 0.31 : (({ low: 0.23, med: 0.43, high: 0.62, ultra: 0.78 })[quality] || 0.43);
+    const treeStep = lowPowerMountain ? 15.5 : 11.2;
     const trunkGeo = new THREE.CylinderGeometry(0.18, 0.3, 3.2, lowPowerMountain ? 4 : 5);
     const leafGeo = new THREE.ConeGeometry(1, 1, lowPowerMountain ? 5 : 7);
     const bark = mat(0x4b382a, 1), pine = mat(th.snow ? 0x718178 : 0x244b39, 0.96);
@@ -527,6 +552,9 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
     }
     const path = [[0,0],[48,-16],[82,-72],[132,-102],[192,-84],[224,-28],[210,38],[162,78],[106,50],[55,83],[0,52],[-40,12],[-28,-44],[24,-84],[76,-72],[0,0]];
     const poleMat = mat(0x694126, 0.92), barrelMat = mat(0xc76025, 0.84), bandMat = mat(0x282d31, 0.48, 0.45), plankMat = mat(0x765136, 0.92);
+    const slopeTexture = presetRoadTex('sky');
+    slopeTexture.repeat.set(1, 1);
+    const slopeTopMat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: slopeTexture, roughness: 0.94, side: THREE.DoubleSide });
     // Les cordes et poteaux latéraux décoratifs sont retirés pour dégager le parcours aérien.
     const placeBarrel = (x, z) => {
       const y = deckY(x, z) + 0.12, barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.52, 1.05, 10), barrelMat);
@@ -542,6 +570,10 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
       colliders.push({ x, z, hx: co * width / 2 + si * 0.45, hz: si * width / 2 + co * 0.45 });
     };
     plank(30, -10, 0.32); plank(112, -91, -0.55); plank(215, -2, 0.18); plank(72, 68, -0.48); plank(-14, -64, 0.62);
+    // Trois petites bosses en bois, avec une montée et une descente douces intégrées au tablier.
+    makeDeckSlope(65, -44, 6.1, 28, 2.0, Math.atan2(34, -56), slopeTopMat, poleMat);
+    makeDeckSlope(162, -93, 6.1, 30, 2.6, Math.atan2(60, 18), slopeTopMat, poleMat);
+    makeDeckSlope(80.5, 66.5, 6.1, 26, 2.1, Math.atan2(-51, 33), slopeTopMat, poleMat);
     for (const [x,z] of [[-145,-28],[247,86],[-92,116],[104,-139]]) {
       const support = groundY(x,z), pole = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.68,Math.max(1,54-support),8), poleMat); pole.position.set(x,support + Math.max(1,54-support)/2,z); pole.castShadow = true; group.add(pole);
     }
@@ -877,8 +909,8 @@ export function createWorld(scene, id, quality = 'med', real = null) {
   {
     const vistaPreset = real && real.synthetic ? real.preset : null;
     const R0 = real && real.synthetic ? real.half * (vistaPreset === 'mountain' ? 0.86 : vistaPreset === 'skate' ? 1.16 : 1.3) : 290, R1 = R0 + (vistaPreset === 'mountain' ? 900 : 500);
-    const NA = lowPowerMountain ? 180 : quality === 'low' ? 180 : quality === 'med' ? 320 : quality === 'high' ? 480 : 800;     // relief allégé sur téléphone
-    const NR = lowPowerMountain ? 36 : quality === 'low' ? 36 : quality === 'med' ? 64 : quality === 'high' ? 96 : 160;        // maillage d'horizon
+    const NA = scenicMountains ? (lowPowerMountain ? 104 : quality === 'low' ? 132 : 196) : quality === 'low' ? 180 : quality === 'med' ? 320 : quality === 'high' ? 480 : 800; // silhouette montagne allégée
+    const NR = scenicMountains ? (lowPowerMountain ? 22 : quality === 'low' ? 28 : 44) : quality === 'low' ? 36 : quality === 'med' ? 64 : quality === 'high' ? 96 : 160; // maillage d'horizon
     const pos = [], col = [], idx = [];
     const base = new THREE.Color(vistaPreset === 'mountain' ? (th.snow ? 0x9ca9b2 : 0x40594f) : vistaPreset === 'f1' ? 0x414a53 : th.hill), c = new THREE.Color();
     const hFn = (x, z, r) => {
@@ -918,8 +950,16 @@ export function createWorld(scene, id, quality = 'med', real = null) {
   /* ---- carte réelle (OpenStreetMap) : bâtiments, routes, eau, arbres construits par morceaux */
   let realApi = null;
   const customRoadTex = real && real.synthetic && ['snow', 'skate', 'mountain', 'sky'].includes(real.preset) ? (theme, kind, tr) => presetRoadTex(real.preset, tr) : roadTex;
-  if (real) realApi = buildReal(group, th, quality, real, { wallTex, laneTex, roadTex: customRoadTex, layer, groundMat, GS });
-  if (real && real.synthetic) addPresetDetails(group, real.preset, realApi, real.half, quality, rampDefs, colliders, lowPowerMountain);
+  if (real) realApi = buildReal(group, th, scenicMountains ? 'low' : quality, real, { wallTex, laneTex, roadTex: customRoadTex, layer, groundMat, GS });
+  if (real && real.synthetic) {
+    const detailScale = real.syntheticScale || 1, detailGroup = new THREE.Group();
+    detailGroup.scale.set(detailScale, 1, detailScale); group.add(detailGroup);
+    const firstRamp = rampDefs.length;
+    addPresetDetails(detailGroup, real.preset, realApi, real.half, quality, rampDefs, colliders, lowPowerMountain);
+    if (detailScale !== 1) for (let i = firstRamp; i < rampDefs.length; i++) {
+      const r = rampDefs[i]; r.x *= detailScale; r.z *= detailScale; r.width *= detailScale; r.length *= detailScale;
+    }
+  }
   const tr = realApi && !(real && real.synthetic && real.preset !== 'city') ? createTraffic(group, real, th, quality, makeCyclist, th.night != null ? th.night : (id === 'neon' || id === 'sunset'), realApi.deckY) : null;   // piétons, voitures, cyclistes
 
   /* ---- ciel, nuages, étoiles, neige */
@@ -1150,7 +1190,9 @@ export function createWorld(scene, id, quality = 'med', real = null) {
         const lx = c * dx - s * dz, lz = s * dx + c * dz;
         if (Math.abs(lx) <= r.width / 2 && Math.abs(lz) <= r.length / 2) {
           const t = lz / r.length + 0.5, rise = r.curved ? r.height * (0.5 - 0.5 * Math.cos(Math.PI * t)) : r.height * t;
-          return { y: (realApi && realApi.elev ? realApi.elev(x, z) : 0) + r.baseOffset + rise, t, dirX: Math.sin(r.angle), dirZ: Math.cos(r.angle) };
+          const base = r.deck && realApi && realApi.deckY ? (realApi.deckY(x, z) ?? realApi.elev(x, z)) : (realApi && realApi.elev ? realApi.elev(x, z) : 0);
+          const lift = r.hump ? r.height * (0.5 - 0.5 * Math.cos(2 * Math.PI * t)) : rise;
+          return { y: base + r.baseOffset + lift, t, dirX: Math.sin(r.angle), dirZ: Math.cos(r.angle) };
         }
       }
       return null;

@@ -52,7 +52,7 @@ export function buildPanel(root, cb) {
 
   let g = group(body, 'Monde'); const wp = h('div', 'worlds'); g.append(wp); worldPicker(wp);
   g.append(h('label', 'lbl', 'Parcours de la ville imaginaire'));
-  const presetRow = h('div'); g.append(presetRow); segment(presetRow, 'preset', [['city', '🏙 Ville + pont'], ['skate', '🛹 Skatepark'], ['mountain', '⛰ Sentier montagne'], ['f1', '🏎 Circuit F1'], ['snow', '❄️ Motoneige'], ['sky', '☁️ Relais dans le ciel']]);
+  const presetRow = h('div', 'preset-options'); g.append(presetRow); segment(presetRow, 'preset', [['city', '🏙 Ville + pont'], ['skate', '🛹 Skatepark'], ['mountain', '⛰ Sentier montagne'], ['f1', '🏎 Circuit F1'], ['snow', '❄️ Motoneige'], ['sky', '☁️ Relais dans le ciel']]);
   g.append(h('label', 'lbl', 'Saison (toutes les cartes)'));
   const rs = h('div'); g.append(rs); segment(rs, 'season', [['summer', '☀️ Été'], ['winter', '❄️ Hiver'], ['spring', '🌱 Printemps'], ['autumn', '🍂 Automne']]);
   range(g, 'Température de l’air', 'temperature', -20, 35, 1, v => v + ' °C');

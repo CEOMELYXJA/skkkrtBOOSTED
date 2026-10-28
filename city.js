@@ -166,6 +166,41 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
     return false;
   };
   const inBlob = (x, z, r) => blobs.some(b => Math.hypot(b.x - x, b.z - z) < b.r + r) || ((preset === 'city' || preset === 'mountain') && Math.abs(x) < 16 + r) || (preset === 'mountain' && nearMountainTrail(x, z, r));
+  const pointInRing = (x, z, ring) => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const a = ring[i], b = ring[j];
+      if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / ((b[1] - a[1]) || 1e-9) + a[0]) inside = !inside;
+    }
+    return inside;
+  };
+  const footprintTouchesRoad = ring => {
+    const minX = Math.min(...ring.map(p => p[0])), maxX = Math.max(...ring.map(p => p[0]));
+    const minZ = Math.min(...ring.map(p => p[1])), maxZ = Math.max(...ring.map(p => p[1]));
+    // Vérifie tout le contour, pas seulement les coins : une façade ne peut plus chevaucher une chaussée.
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i], b = ring[(i + 1) % ring.length], length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const steps = Math.max(1, Math.ceil(length / 2.4));
+      for (let k = 0; k <= steps; k++) {
+        const t = k / steps, x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t;
+        if (nearRoad(x, z, 5.5)) return true;
+        // La route du pont est ajoutée après les bâtiments : on réserve donc son emprise dès maintenant.
+        if (preset === 'city' && Math.abs(z) < 10 && x > -119 && x < 119) return true;
+      }
+    }
+    // Détecte aussi une route qui traverserait l'intérieur d'un grand bâtiment.
+    for (let gx = Math.floor(minX / SK); gx <= Math.floor(maxX / SK); gx++) {
+      for (let gz = Math.floor(minZ / SK); gz <= Math.floor(maxZ / SK); gz++) {
+        const samples = sgrid.get(gx + ',' + gz);
+        if (samples && samples.some(s => pointInRing(s[0], s[1], ring))) return true;
+      }
+    }
+    if (preset === 'city') {
+      // Vérifie les points de la ligne du pont au cas où elle passerait entièrement sous l'emprise.
+      for (let x = -108; x <= 108; x += 3) if (pointInRing(x, 0, ring)) return true;
+    }
+    return false;
+  };
   let bid = 900000;
   const tryBuilding = (cx, cz, w, d, ang) => {
     const r = Math.hypot(w, d) / 2;
@@ -184,8 +219,7 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
       }
     } else { ring = []; for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; ring.push([Math.cos(a) * hw2, Math.sin(a) * hd2]); } }   // tour ronde
     const P = ring.map(c => loc(c[0], c[1]));
-    for (const p of P) if (nearRoad(p[0], p[1], 3.2)) return false;
-    if (nearRoad(cx, cz, 3.2)) return false;
+    if (footprintTouchesRoad(P) || nearRoad(cx, cz, 5.5)) return false;
     // hauteur : plus haut vers le centre-ville
     const dc = Math.hypot(cx, cz) / half, rd = R();
     let h, bt;
@@ -320,11 +354,20 @@ function syntheticHeight(preset, seed) {
 
 // ville prête à jouer : même structure que la carte réelle
 export function makeCity(seed, tri, half = 400, preset = 'city') {
+  const scale = preset === 'skate' ? 0.72 : preset === 'f1' ? 0.65 : 1;
   const j = generateCityJSON(seed, half, preset);
-  const D = parseOSM(j, LAT0, LON0, tri, half);
-  D.synthetic = true; D.me = [0, 0]; D.heading = null; D.seed = seed; D.preset = preset;
-  D.syntheticHeight = syntheticHeight(preset, seed);
-  D.me = preset === 'f1' ? [0, -205] : preset === 'skate' ? [-98, -58] : preset === 'snow' ? [270, 0] : [0, 0];
+  if (scale !== 1) for (const el of j.elements) if (Array.isArray(el.geometry)) {
+    el.geometry = el.geometry.map(p => {
+      const x = (p.lon - LON0) * KX, z = -(p.lat - LAT0) * KZ;
+      return ll(x * scale, z * scale);
+    });
+  }
+  const D = parseOSM(j, LAT0, LON0, tri, half * scale);
+  D.synthetic = true; D.me = [0, 0]; D.heading = null; D.seed = seed; D.preset = preset; D.syntheticScale = scale;
+  const height = syntheticHeight(preset, seed);
+  D.syntheticHeight = scale === 1 ? height : (x, z) => height(x / scale, z / scale);
+  const spawn = preset === 'f1' ? [0, -205] : preset === 'skate' ? [-98, -58] : preset === 'snow' ? [270, 0] : [0, 0];
+  D.me = [spawn[0] * scale, spawn[1] * scale];
   D.syntheticHmin = preset === 'mountain' ? -16 : preset === 'city' ? -20 : preset === 'snow' ? -14 : preset === 'skate' ? -3 : -4;
   return D;
 }

@@ -230,7 +230,7 @@ function swapFull(now) {                                           // remplace l
 let cityCache = null;
 function cityFor(seed, preset) {
   const key = String(seed) + ':' + preset;
-  const half = preset === 'skate' ? 180 : preset === 'f1' ? 360 : preset === 'mountain' ? 520 : 400;
+  const half = preset === 'skate' ? 180 : preset === 'f1' ? 360 : preset === 'mountain' ? 380 : 400;
   if (!cityCache || cityCache.key !== key) cityCache = { key, D: makeCity(seed, tri, half, preset) };
   return cityCache.D;
 }
