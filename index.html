@@ -89,6 +89,41 @@ body[data-sport="1"] #a #sunset{color:#f3dfbd}
  body[data-sport="1"] #a #dash>[data-id="bat"],body[data-sport="1"] #a #dash>[data-id="stats"],body[data-sport="1"] #a #dash>[data-id="cmd"]{grid-column:span 2;grid-row:auto}
  body[data-sport="1"] #a #dash>[data-id="jauge"] #sp{font-size:4rem}
 }
+
+/* Cockpit aviation : mise en page large, cadrans lisibles et retour toujours accessible */
+#spc{display:block;width:100%;min-height:48px;margin:0 0 12px!important;font-weight:700}
+body[data-sport="1"] section#a{width:min(1840px,calc(100% - 32px));max-width:none;margin:14px auto 40px;padding:clamp(14px,1.8vw,28px);box-sizing:border-box;overflow:visible}
+body[data-sport="1"] section#a #spc{position:sticky;top:8px;z-index:120;width:100%;min-height:54px;margin:0 0 14px!important;border:2px solid #f2bd60!important;border-radius:12px;background:linear-gradient(180deg,#76532a,#38291c)!important;color:#fff3d6!important;font-size:1.02rem;font-weight:800;letter-spacing:.02em;box-shadow:0 6px 18px #000b,inset 0 1px #fff5}
+body[data-sport="1"] section#a #spc:hover{border-color:#ffe09a!important;background:linear-gradient(180deg,#896338,#49331f)!important;box-shadow:0 0 0 3px #f2bd6033,0 8px 22px #000b}
+body[data-sport="1"] #a #dash{grid-template-columns:repeat(12,minmax(0,1fr));grid-auto-rows:minmax(126px,auto);gap:clamp(10px,1vw,16px);align-items:stretch}
+body[data-sport="1"] #a #dash>[data-id="jauge"]{grid-column:span 4;grid-row:span 2}
+body[data-sport="1"] #a #dash>[data-id="bat"]{grid-column:span 3;grid-row:auto}
+body[data-sport="1"] #a #dash>[data-id="stats"]{grid-column:span 5;grid-row:span 2}
+body[data-sport="1"] #a #dash>[data-id="cmd"]{grid-column:span 3;grid-row:auto}
+body[data-sport="1"] #a #dash>[data-id="fx"],body[data-sport="1"] #a #dash>[data-id="horn"],body[data-sport="1"] #a #dash>[data-id="feux"],body[data-sport="1"] #a #dash>[data-id="def"]{grid-column:span 4}
+body[data-sport="1"] #a #dash>[data-id="conso"],body[data-sport="1"] #a #dash>[data-id="si"]{grid-column:span 6}
+body[data-sport="1"] #a #dash>[data-id="diag"]{grid-column:span 8}
+body[data-sport="1"] #a #dash>[data-id="look"]{grid-column:span 12;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:start;gap:12px}
+body[data-sport="1"] #a #dash>[data-id="look"]>h3,body[data-sport="1"] #a #dash>[data-id="look"]>p{grid-column:1/-1;margin-top:0}
+body[data-sport="1"] #a #dash>[data-id="look"]>#fl{grid-column:1/-1;grid-template-columns:repeat(6,minmax(0,1fr))}
+body[data-sport="1"] #a #dash>[data-id="look"]>.c{min-width:0;margin:0!important}
+body[data-sport="1"] #a #dash>[data-id="look"]>.g:not(#fl){grid-column:span 2;grid-template-columns:repeat(2,minmax(0,1fr))}
+body[data-sport="1"] #a #dash>[data-id="look"]>#hr,body[data-sport="1"] #a #dash>[data-id="look"]>#ro{grid-column:span 2;min-height:46px}
+body[data-sport="1"] #a #dash>[data-id="diag"] pre{max-width:100%;overflow:auto}
+@media(max-width:760px){
+ body[data-sport="1"] section#a{width:calc(100% - 16px);margin:8px auto 24px;padding:12px}
+ body[data-sport="1"] section#a #spc{top:4px;min-height:50px}
+ body[data-sport="1"] #a #dash{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:auto;gap:8px}
+ body[data-sport="1"] #a #dash>[data-id="jauge"],body[data-sport="1"] #a #dash>[data-id="bat"],body[data-sport="1"] #a #dash>[data-id="stats"],body[data-sport="1"] #a #dash>[data-id="cmd"],body[data-sport="1"] #a #dash>[data-id="fx"],body[data-sport="1"] #a #dash>[data-id="horn"],body[data-sport="1"] #a #dash>[data-id="feux"],body[data-sport="1"] #a #dash>[data-id="conso"],body[data-sport="1"] #a #dash>[data-id="si"],body[data-sport="1"] #a #dash>[data-id="def"],body[data-sport="1"] #a #dash>[data-id="diag"],body[data-sport="1"] #a #dash>[data-id="look"]{grid-column:1/-1;grid-row:auto}
+ body[data-sport="1"] #a #dash>[data-id="look"]{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ body[data-sport="1"] #a #dash>[data-id="look"]>#fl{grid-template-columns:repeat(2,minmax(0,1fr))}
+ body[data-sport="1"] #a #dash>[data-id="look"]>.g:not(#fl){grid-column:1/-1}
+ body[data-sport="1"] #a #dash>[data-id="jauge"] #sp{font-size:4rem}
+}
+@media(max-width:420px){
+ body[data-sport="1"] section#a{width:calc(100% - 10px);padding:8px}
+ body[data-sport="1"] #a #dash>.blk{padding:10px}
+}
 @media (display-mode:standalone) and (min-width:700px){body{border-radius:18px}header{border-radius:18px 18px 0 0}}
 .err{color:#d33}
 .hl{display:flex;align-items:baseline;gap:8px}
@@ -106,6 +141,7 @@ input[type=color]{width:100%;height:36px;border:0;background:none;padding:0}
 <nav id="nav"><button data-s="a" class="on">Tableau</button><button data-s="b">Trajets</button><button data-s="c">Météo</button><button data-s="d">Entretien</button><button data-s="e">Jeu</button><button data-s="f">3D</button></nav>
 
 <section id="a" class="on">
+ <button id="spc" type="button" aria-pressed="false" aria-label="Activer le cockpit aviation">✈ Essayer le cockpit aviation</button>
  <button id="cn" style="width:100%;margin-bottom:12px">Connecter ma trottinette</button>
  <p id="ns" class="n err" hidden>Ce navigateur ne permet pas le Bluetooth web (Safari sur iPhone ne le permet pas). Ouvre cette page dans l'app gratuite <b>Bluefy</b> (App Store), ou utilise Chrome sur Android.</p>
  <button id="bf" hidden style="width:100%;margin-bottom:12px">Ouvrir cette page dans Bluefy</button>
@@ -151,7 +187,6 @@ input[type=color]{width:100%;height:36px;border:0;background:none;padding:0}
    <div class="c" style="margin-top:10px"><small>Fond : couleur (arc-en-ciel)</small><input id="hue" type="range" min="0" max="360" value="0">
     <small style="margin-top:10px">Fond : sombre ↔ clair</small><input id="lt" class="rg" type="range" min="4" max="96" value="50"></div>
    <div class="g"><label class="c"><small>Couleur du texte</small><input id="ct" type="color" value="#ffffff"></label><label class="c"><small>Couleur d'accent</small><input id="ca" type="color" value="#ffffff"></label></div>
-   <button id="spc" style="width:100%;margin:10px 0">⚡ Activer le cockpit sportif</button><p class="n">Cockpit sombre inspiré d’un tableau de bord d’avion, avec cadrans lumineux et alertes ambre.</p>
    <button id="hr">Couleurs d'origine</button> <button id="ro">Disposition d'origine</button></div>
  </div>
 </section>
@@ -204,7 +239,7 @@ function theme(){
   if(cfg.h!=null||cfg.l!=null){const l=cfg.l??(d?11:93);set('--bg',`hsl(${cfg.h||0} ${cfg.h==null?0:d?55:85}% ${l}%)`);set('--fg',l>55?'#111':'#fff')}else{set('--bg');set('--fg')}
   if(cfg.tx)set('--fg',cfg.tx);
   document.body.dataset.sport=cfg.sport?'1':'0';
-  const sport=$('#spc');if(sport){sport.classList.toggle('on',!!cfg.sport);sport.textContent=cfg.sport?'⚡ Cockpit de pilotage activé':'⚡ Activer le cockpit de pilotage'}
+  const sport=$('#spc');if(sport){const active=!!cfg.sport;sport.classList.toggle('on',active);sport.textContent=active?'↩ Revenir au tableau original':'✈ Essayer le cockpit aviation';sport.setAttribute('aria-pressed',String(active));sport.setAttribute('aria-label',active?'Revenir au tableau original':'Activer le cockpit aviation')}
   document.body.style.fontStyle=cfg.f==='ita'?'italic':'';set('--ac',cfg.ac);set('--ff',F[cfg.f]&&F[cfg.f][1]);set('--z',cfg.z);set('--sz',cfg.sz);
   $$('#fl button').forEach(b=>b.classList.toggle('on',b.dataset.f===(cfg.f||'sys')));
   document.querySelector('meta[name=theme-color]').content=getComputedStyle(document.body).backgroundColor;
