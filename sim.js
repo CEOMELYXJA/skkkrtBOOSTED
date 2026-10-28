@@ -101,6 +101,8 @@ function renderFrame(dt) {
 /* ------------------------------------------------------------ état */
 const state = { speed: 0, yaw: SPAWN.yaw, steer: 0, kb: false, head: false, started: false, dist: 0, camYaw: SPAWN.yaw, bump: 0, lastKmh: 0, brake: false, hitCd: 0, slope: 0 };
 const fall = { on: false, t: 0, side: 1, moved: false };          // chute (bâtiment ou cycliste)
+const air = { active: false, vy: 0, requested: false, cooldown: 0 };
+let iceFallCooldown = 0;
 const FALL_DOWN = 0.32, FALL_UP = 2.0, FALL_DUR = 2.7;            // tombe · reste au sol · se relève
 const ease = x => x * x * (3 - 2 * x);
 const keys = Object.create(null), kk = Object.create(null);
@@ -148,6 +150,7 @@ addEventListener('keydown', e => {
   keys[e.code] = true; if (e.key) kk[e.key.length === 1 ? e.key.toLowerCase() : e.key] = true;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (e.repeat === false || e.repeat === undefined) {
+    if (e.code === 'KeyJ' && state.started && !paused) air.requested = true;
     if (e.code === 'Escape' || e.code === 'KeyP') { if (!panel.hidden) closePanel(); else if (state.started) setPause(!paused); }
     if (e.code === 'KeyM' && state.started) set('showMap', !settings.showMap);
     if (e.code === 'KeyV' && state.started) extras.toggleVisor();
@@ -257,6 +260,7 @@ function placeAtSpawn() {
   const deck = world.api && world.api.deckY(sp.x, sp.z);
   const floor = deck != null ? deck : world.api ? world.api.elev(sp.x, sp.z) : 0;
   rig.position.set(sp.x, floor || 0, sp.z); state.yaw = state.camYaw = sp.yaw; state.speed = 0;
+  air.active = false; air.vy = 0; air.requested = false;
 }
 function rebuildWorld(done) {
   const veil = $('#veil'); veil.hidden = false; setVeil('Chargement du monde…');
@@ -278,7 +282,7 @@ function rebuildWorld(done) {
     } else {
       setVeil('Création de la ville…');
       await new Promise(r => setTimeout(r, 30));
-      real = cityFor(settings.seed, settings.preset); synth = true; theme = composeTheme(settings.preset === 'snow' ? 'winter' : settings.season, settings.tod, settings.glow);
+      real = cityFor(settings.seed, settings.preset); synth = true; theme = composeTheme(settings.season, settings.tod, settings.glow);
     }
     if (id !== buildId) return;
     if (synth) { real.H = real.syntheticHeight || null; real.Hmin = real.syntheticHmin || 0; }
@@ -389,7 +393,7 @@ function calibrate() {
 }
 function goHome() {
   const sp = world ? world.spawn : SPAWN;
-  rig.position.set(sp.x, 0, sp.z); state.yaw = state.camYaw = sp.yaw; state.speed = 0; log('Retour au départ.');
+  placeAtSpawn(); log('Retour au départ.');
 }
 async function toggleHead() {
   if (T.connected()) { await T.command('head'); return; }
@@ -659,13 +663,14 @@ function flash() {
 }
 function startFall(why, speed) {
   if (fall.on) return;
+  air.active = false; air.vy = 0; air.requested = false;
   SL.note('fall', why, Math.round(speed * 10) / 10);
   fall.on = true; fall.t = 0; fall.moved = false; fall.side = Math.random() < 0.5 ? -1 : 1;
   state.speed = 0; state.bump = 1; state.hitCd = Math.max(state.hitCd, 1);
   audio.sfx('crash'); flash();
   game.event(why === 'wall' || why === 'tree' ? 'wall' : 'cyclistfall');
   game.say('CHUTE !', 1100, 'bad');
-  log({ wall: 'Chute : collision avec un bâtiment.', tree: 'Chute : tu as percuté un arbre.', ped: 'Chute : tu as percuté un piéton.', car: 'Chute : tu as percuté un véhicule.' }[why] || 'Chute : tu as percuté un cycliste.');
+  log({ wall: 'Chute : collision avec un bâtiment.', tree: 'Chute : tu as percuté un arbre.', ped: 'Chute : tu as percuté un piéton.', car: 'Chute : tu as percuté un véhicule.', ice: 'Plaque glacée : tu as perdu l’adhérence et tu es tombée.' }[why] || 'Chute : tu as percuté un cycliste.');
 }
 // après la chute : on est remis sur la piste cyclable la plus proche, dans le sens de la piste
 const SAFE_GAP = 12;                                                // distance libre minimale (m) autour de l'endroit où on est remis debout
@@ -888,6 +893,7 @@ $('#go').onclick = () => {
   newGame();
 };
 $('#ng').onclick = playGame;
+$('#jumpBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (state.started && !paused) air.requested = true; });
 addEventListener('message', () => {});
 
 /* ------------------------------------------------------------ simulation */
@@ -1092,6 +1098,13 @@ function frame(now) {
   const prev = state.speed;
   state.speed += (target - state.speed) * (kbDirect ? 1 : Math.min(1, dt * 6));
   state.brake = (prev - state.speed) / Math.max(dt, 0.001) > 2.2 || (kbActive && (kDown() || keys.Space || jy < -0.25));
+  iceFallCooldown = Math.max(0, iceFallCooldown - dt);
+  const icy = world.preset === 'snow' || settings.season === 'winter';
+  if (settings.falls && icy && state.started && !fall.on && !air.active && state.speed > 4.5 && iceFallCooldown <= 0) {
+    const cold = clamp((18 - (+settings.temperature || 0)) / 18, 0.18, 1.45);
+    const chance = dt * 0.00002 * state.speed * state.speed * (0.72 + Math.abs(state.steer) * 0.65) * cold;
+    if (Math.random() < chance) { startFall('ice', state.speed); iceFallCooldown = 50 + Math.random() * 100; }
+  }
 
   // --- chute en cours : on est au sol ; puis on est remis sur la piste et on se relève
   let fpose = 0;
@@ -1147,15 +1160,34 @@ function frame(now) {
   rig.position.x = clamp(rig.position.x, -lim, lim); rig.position.z = clamp(rig.position.z, -lim, lim);
   state.dist += state.speed * dt;
   rig.rotation.y = state.yaw;
-  {                                                                  // relief : hauteur du sol et pente dans le sens de la marche
-    const wa = world.api;
-    if (wa && wa.hasRelief) {
-      const fx = -Math.sin(state.yaw), fz = -Math.cos(state.yaw), qx = rig.position.x, qz = rig.position.z;
-      const cy = rig.position.y;
-      rig.position.y = wa.surf(qx, qz, cy);                                           // sur un pont : le tablier, pas la vallée
-      const sl = (wa.surf(qx + fx * 1.5, qz + fz * 1.5, cy) - wa.surf(qx - fx * 1.5, qz - fz * 1.5, cy)) / 3;
-      state.slope += (sl - state.slope) * Math.min(1, dt * 5);
-    } else { rig.position.y = 0; state.slope = 0; }
+  {                                                                  // vraie gravité, pente du terrain et surfaces des rampes
+    const wa = world.api, px0 = px, pz0 = pz, qx = rig.position.x, qz = rig.position.z;
+    const floorAt = (x, z, cy) => {
+      let y = wa && wa.hasRelief ? wa.surf(x, z, cy) : 0;
+      const ramp = world.rampAt ? world.rampAt(x, z) : null;
+      if (ramp && ramp.y > y) y = ramp.y;
+      return { y, ramp };
+    };
+    const before = floorAt(px0, pz0, rig.position.y), after = floorAt(qx, qz, rig.position.y);
+    const onBridge = !!(wa && wa.deckY && wa.deckY(px0, pz0) != null);
+    const grounded = !air.active && rig.position.y <= before.y + 0.18;
+    if (air.requested) {
+      air.requested = false;
+      if (state.started && !fall.on && grounded && !onBridge && state.speed > 0.8) { air.active = true; air.vy = 4.7; }
+    }
+    if (!air.active && before.ramp && before.ramp.t > 0.82 && !after.ramp && state.speed > 4.5) {
+      const along = (vx * before.ramp.dirX + vz * before.ramp.dirZ) / Math.max(0.01, Math.hypot(vx, vz));
+      if (along > 0.35) { air.active = true; air.vy = 4.6; state.bump = Math.max(state.bump, 0.25); }
+    }
+    if (air.active) {
+      air.vy -= 9.81 * dt; rig.position.y += air.vy * dt;
+      if (rig.position.y <= after.y) { const impact = Math.abs(air.vy); rig.position.y = after.y; air.active = false; air.vy = 0; air.cooldown = 0.3; state.bump = Math.max(state.bump, Math.min(1, impact / 8)); scooter.setLanding(Math.min(1, impact / 8)); }
+    } else rig.position.y = after.y;
+    air.cooldown = Math.max(0, air.cooldown - dt);
+    const fx = -Math.sin(state.yaw), fz = -Math.cos(state.yaw);
+    const ahead = floorAt(qx + fx * 1.5, qz + fz * 1.5, rig.position.y).y, behind = floorAt(qx - fx * 1.5, qz - fz * 1.5, rig.position.y).y;
+    const sl = (ahead - behind) / 3;
+    state.slope += (sl - state.slope) * Math.min(1, dt * 5);
     rig.rotation.x = settings.slopeTilt ? Math.atan(state.slope) : 0;
   }
   state.bump = Math.max(0, state.bump - dt * 3);
@@ -1218,6 +1250,7 @@ function frame(now) {
     const lane = world.real ? world.api.onLane(rig.position.x, rig.position.z) : onLane(rig.position.x, rig.position.z);
     $('#mlane').textContent = lane ? (world.real ? 'Sur route ✓' : 'Sur piste ✓') : (world.real ? 'Hors route' : 'Hors piste'); $('#mlane').className = 'chip ' + (lane ? 'ok' : 'warn');
     { const sj = !!settings.joystick && !tel; $('#joy').hidden = !sj; $('#hud').classList.toggle('joyOn', sj); if (!sj) { joy.x = joy.y = 0; } }
+    $('#jumpBtn').hidden = !state.started;
     { const ms = $('#mslope'), rel = !!(world.api && world.api.hasRelief); ms.hidden = !rel;
       if (rel) { const pc = state.slope * 100; ms.textContent = (pc >= 0.5 ? '▲ ' : pc <= -0.5 ? '▼ ' : '▬ ') + Math.abs(pc).toFixed(0) + ' %'; } }
     { const drift = $('#mslide'); drift.hidden = !(world.preset === 'snow' && snowSlide > 0); }

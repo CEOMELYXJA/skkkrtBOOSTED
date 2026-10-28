@@ -26,7 +26,8 @@ export const DEFAULTS = {
   mapRadius: '800',    // carte réelle : demi-côté en mètres (zone locale pour limiter le téléchargement initial)
   mapV: 1,             // migration : revient une fois de la zone 6 km qui lançait plus de 200 requêtes
   realTheme: 'day',    // (ancien réglage, remplacé par saison / moment / lumière)
-  season: 'summer',    // ville imaginaire ET carte réelle : summer | winter | spring (neige par plaques) | autumn (feuilles qui tombent)
+  season: 'summer',    // toutes les cartes : summer | winter | spring (neige par plaques) | autumn (feuilles qui tombent)
+  temperature: 12,     // température ambiante réglable; influence le risque de glissade et de chute sur la neige
   tod: 'day',          // moment : day | dusk (soir) | night (nuit)
   glow: 'normal',      // lumière : normal (discrète) | neon (intérieurs et lampes très éclairés)
   miniOsm: true,       // carte réelle : la mini-carte utilise les vraies tuiles OpenStreetMap (comme la 2D)

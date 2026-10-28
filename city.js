@@ -142,7 +142,7 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
     return false;
   };
   const specialTrack = ['skate', 'f1', 'sky'].includes(preset);
-  const nPark = specialTrack ? 0 : 3 + Math.floor(R() * 2), nPond = preset === 'snow' ? 0 : preset === 'mountain' ? 4 : 2 + Math.floor(R() * 2), nWood = preset === 'mountain' ? 8 : preset === 'snow' ? 10 : specialTrack ? 0 : 2 + Math.floor(R() * 2);
+  const nPark = specialTrack || preset === 'snow' ? 0 : 3 + Math.floor(R() * 2), nPond = ['snow', 'sky'].includes(preset) ? 0 : preset === 'mountain' ? 4 : 2 + Math.floor(R() * 2), nWood = preset === 'mountain' ? 0 : preset === 'snow' ? 10 : specialTrack ? 0 : 2 + Math.floor(R() * 2);
   for (let i = 0; i < nPark; i++) makeBlob('park', 24, 36);
   for (let i = 0; i < nPond; i++) makeBlob('water', 12, 22);
   for (let i = 0; i < nWood; i++) makeBlob('wood', 22, 34);
@@ -156,7 +156,16 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
     for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) { const g = bgrid.get((cx + a) + ',' + (cz + b)); if (g) for (const o of g) if (Math.hypot(o.x - x, o.z - z) < (o.r + r) * 0.8) return false; }
     return true;
   };
-  const inBlob = (x, z, r) => blobs.some(b => Math.hypot(b.x - x, b.z - z) < b.r + r) || ((preset === 'city' || preset === 'mountain') && Math.abs(x) < 16 + r);
+  const mountainTrail = [[0, 0], [28, -44], [62, -82], [94, -116], [130, -128], [166, -95], [202, -46], [236, 6], [265, 55], [236, 96], [198, 130], [154, 156], [112, 142], [72, 106], [35, 65], [0, 22]];
+  const nearMountainTrail = (x, z, r) => {
+    for (let i = 0; i < mountainTrail.length - 1; i++) {
+      const a = mountainTrail[i], b = mountainTrail[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], q = dx * dx + dz * dz;
+      const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / q));
+      if (Math.hypot(x - a[0] - t * dx, z - a[1] - t * dz) < r + 8) return true;
+    }
+    return false;
+  };
+  const inBlob = (x, z, r) => blobs.some(b => Math.hypot(b.x - x, b.z - z) < b.r + r) || ((preset === 'city' || preset === 'mountain') && Math.abs(x) < 16 + r) || (preset === 'mountain' && nearMountainTrail(x, z, r));
   let bid = 900000;
   const tryBuilding = (cx, cz, w, d, ang) => {
     const r = Math.hypot(w, d) / 2;
@@ -194,7 +203,7 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
   for (const r of placed) {
     const P = r.P, cum = [0]; for (let k = 1; k < P.length; k++) cum.push(cum[k - 1] + Math.hypot(P[k][0] - P[k - 1][0], P[k][1] - P[k - 1][1]));
     const total = cum[cum.length - 1];
-    if (r.cls === 'cycleway' || ['skate', 'mountain', 'snow'].includes(preset)) continue;
+    if (r.cls === 'cycleway' || ['skate', 'mountain', 'snow', 'f1'].includes(preset)) continue;
     const at = s => {
       let k = 1; while (k < cum.length - 1 && cum[k] < s) k++;
       const t = (s - cum[k - 1]) / ((cum[k] - cum[k - 1]) || 1), x = P[k - 1][0] + (P[k][0] - P[k - 1][0]) * t, z = P[k - 1][1] + (P[k][1] - P[k - 1][1]) * t;
@@ -255,8 +264,7 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
     addCourse(oval(0, 0, 20, 12, 48, 0.02), 'cycleway', { name: 'Mini-boucle', surface: 'concrete' }, true);
   }
   if (preset === 'mountain') {
-    const trail = [[0, 0], [28, -44], [62, -82], [94, -116], [130, -128], [166, -95], [202, -46], [236, 6], [265, 55], [236, 96], [198, 130], [154, 156], [112, 142], [72, 106], [35, 65], [0, 22]];
-    addCourse(trail, 'cycleway', { name: 'Sentier des crêtes', surface: 'gravel' });
+    addCourse(mountainTrail, 'cycleway', { name: 'Sentier des crêtes', surface: 'gravel' });
   }
   if (preset === 'f1') {
     const track = [[0, -205], [92, -196], [170, -154], [240, -112], [256, -58], [235, -4], [180, 26], [112, 23], [76, 51], [118, 91], [192, 125], [220, 178], [178, 226], [104, 220], [45, 185], [10, 132], [-56, 154], [-122, 202], [-202, 184], [-252, 130], [-246, 72], [-214, 25], [-150, 4], [-88, -18], [-120, -62], [-204, -82], [-250, -132], [-205, -180], [-108, -214], [-26, -210]];
@@ -278,15 +286,28 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
 
 function syntheticHeight(preset, seed) {
   const phase = ((seed >>> 0) % 4096) / 4096 * Math.PI * 2;
-  if (preset === 'mountain') return (x, z) => {
-    // Des sommets hauts autour du parcours; le sentier lui-même garde des pentes roulables.
-    const peaks = 245 * Math.exp(-(((x + 455) ** 2) / 44000 + ((z + 445) ** 2) / 52000))
-      + 270 * Math.exp(-(((x - 455) ** 2) / 50000 + ((z - 445) ** 2) / 56000))
-      + 200 * Math.exp(-(((x + 455) ** 2) / 50000 + ((z - 445) ** 2) / 48000))
-      + 220 * Math.exp(-(((x - 455) ** 2) / 52000 + ((z + 445) ** 2) / 50000));
-    const ridge = 5 * Math.sin(x / 170 + phase) + 4 * Math.cos(z / 160 - phase) + 3 * Math.sin((x + z) / 210);
-    return ridge + peaks;
-  };
+  if (preset === 'mountain') {
+    const trail = [[0, 0], [28, -44], [62, -82], [94, -116], [130, -128], [166, -95], [202, -46], [236, 6], [265, 55], [236, 96], [198, 130], [154, 156], [112, 142], [72, 106], [35, 65], [0, 22]];
+    const lengths = [0];
+    for (let i = 1; i < trail.length; i++) lengths[i] = lengths[i - 1] + Math.hypot(trail[i][0] - trail[i - 1][0], trail[i][1] - trail[i - 1][1]);
+    return (x, z) => {
+      let near = Infinity, along = 0;
+      for (let i = 0; i < trail.length - 1; i++) {
+        const a = trail[i], b = trail[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], ll = dx * dx + dz * dz;
+        const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / ll));
+        const d = Math.hypot(x - a[0] - t * dx, z - a[1] - t * dz);
+        if (d < near) { near = d; along = lengths[i] + t * Math.sqrt(ll); }
+      }
+      // Un relief qui suit le sentier en douceur, avec de vraies montées et descentes sans cassure de plancher.
+      const trailLift = (5.2 * Math.sin(along / 68 + phase) + 2.1 * Math.sin(along / 29 - phase)) * Math.exp(-(near * near) / 2500);
+      const peaks = 255 * Math.exp(-(((x + 420) ** 2) / 52000 + ((z + 420) ** 2) / 62000))
+        + 285 * Math.exp(-(((x - 420) ** 2) / 56000 + ((z - 420) ** 2) / 64000))
+        + 230 * Math.exp(-(((x + 420) ** 2) / 56000 + ((z - 420) ** 2) / 58000))
+        + 250 * Math.exp(-(((x - 420) ** 2) / 58000 + ((z + 420) ** 2) / 56000));
+      const ridge = 5 * Math.sin(x / 170 + phase) + 4 * Math.cos(z / 160 - phase) + 3 * Math.sin((x + z) / 210);
+      return ridge + peaks + trailLift;
+    };
+  }
   if (preset === 'snow') return (x, z) => {
     const broad = 3.5 * Math.sin(x / 112 + phase) + 3 * Math.cos(z / 96 - phase);
     const humps = 9 * Math.pow(Math.max(0, Math.sin((x + phase * 12) / 47) * Math.cos((z - phase * 9) / 53)), 4)

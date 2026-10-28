@@ -357,6 +357,7 @@ export function buildReal(group, th, quality, D, H) {
   const baseRAD = lo ? 2 : hi ? 4 : 3, RADf = () => (+settings.bldRad) || baseRAD;   // rayon (en morceaux) construit autour du joueur
   const TR = Math.min(4, +settings.texRes || 1);
   const NAT = natureOn();                                          // v9.25 : gazon, feuillage en cartes, textures naturelles, ciel
+  const snowGround = !!(th.snow || th.snowOnGround);
   const col = h => new THREE.Color(h);
   // relief : D.H(x, z) = altitude en mètres par rapport à ta position (absent = terrain plat, comme avant)
   const EL = D.H || null, E = EL || (() => 0), GS = H.GS || 7000;
@@ -578,7 +579,7 @@ const marks = !!settings.roadMarks, mkRoad = kind => lay(new THREE.MeshStandardM
         if (!houselike || b.h > 12 || area < 30 || area > 450) return null;
         return hash01(b.id, 11) < 0.3 ? 'hip' : 'gable';
       };
-      const ROOFS = th.snow ? [0xe9eef5, 0xdfe7f0, 0xf3f6fa] : [0x5a5f68, 0x6e4b3c, 0x3a3f46, 0x7a3f35, 0x4b5b4c, 0x4a4d55];
+      const ROOFS = snowGround ? [0xe9eef5, 0xdfe7f0, 0xf3f6fa] : [0x5a5f68, 0x6e4b3c, 0x3a3f46, 0x7a3f35, 0x4b5b4c, 0x4a4d55];
       const _d = new THREE.Color();
       function pitchedRoof(b, p, top, y0, wr, wg, wb, uo, kind) {
         const l01 = Math.hypot(p[2] - p[0], p[3] - p[1]), l12 = Math.hypot(p[4] - p[2], p[5] - p[3]), short = Math.min(l01, l12);
@@ -831,7 +832,7 @@ const marks = !!settings.roadMarks, mkRoad = kind => lay(new THREE.MeshStandardM
         _o.position.set(T[i * 2], E(T[i * 2], T[i * 2 + 1]), T[i * 2 + 1]); _o.rotation.set(0, rnd(seed + i) * 6.28, 0); _o.scale.set(s, s * (0.9 + rnd(seed + i * 2.3) * 0.3), s); _o.updateMatrix();
         tr.setMatrixAt(i, _o.matrix); lf.setMatrixAt(i, _o.matrix);
         _c.set(th.leafPal ? th.leafPal[Math.floor(rnd(seed + i * 6.1) * th.leafPal.length) % th.leafPal.length] : th.leaf).offsetHSL((rnd(seed + i * 9) - 0.5) * 0.04, 0, (rnd(seed + i * 4) - 0.5) * 0.1);
-        if (th.snow) _c.lerp(snowWhite, 0.72);                           // branches visibly loaded with fresh snow
+        if (snowGround) _c.lerp(snowWhite, 0.72);                           // branches visibly loaded with fresh snow
         lf.setColorAt(i, _c);
       }
       g.add(tr, lf); inst.push(tr, lf);

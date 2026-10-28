@@ -307,13 +307,69 @@ function graffitiTexture() {
   g.globalAlpha = 1; g.filter = 'none';
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANI(); return t;
 }
-function addPresetDetails(group, preset, api, half) {
+function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = []) {
   const mat = (color, roughness = 0.85, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness, side: THREE.DoubleSide });
   const addBox = (x, y, z, sx, sy, sz, material, angle = 0) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material); m.position.set(x, y, z); m.rotation.y = angle; m.castShadow = true; m.receiveShadow = true; group.add(m); return m;
   };
   const groundY = (x, z) => api ? api.elev(x, z) : 0;
   const deckY = (x, z) => { const y = api && api.deckY(x, z); return y == null ? groundY(x, z) : y; };
+  const makeRampMesh = (x, z, width, length, height, angle, material, baseOffset = 0.05) => {
+    const c = Math.cos(angle), s = Math.sin(angle);
+    const at = (lx, lz) => {
+      const wx = x + c * lx + s * lz, wz = z - s * lx + c * lz;
+      return groundY(wx, wz) + baseOffset;
+    };
+    const y0 = at(-width / 2, -length / 2), y1 = at(width / 2, -length / 2);
+    const y2 = at(-width / 2, length / 2) + height, y3 = at(width / 2, length / 2) + height;
+    const y4 = at(-width / 2, length / 2), y5 = at(width / 2, length / 2);
+    const v = [-width/2,y0,-length/2, width/2,y1,-length/2, -width/2,y2,length/2, width/2,y3,length/2, -width/2,y4,length/2, width/2,y5,length/2];
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); geo.setIndex([0,1,3,0,3,2,0,2,4,1,5,3,2,3,5,2,5,4,0,4,5,0,5,1]); geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, material); m.position.set(x, 0, z); m.rotation.y = angle; m.castShadow = true; m.receiveShadow = true; group.add(m);
+    rampDefs.push({ x, z, width, length, height, angle, baseOffset });
+    return { endX: x + s * length / 2, endZ: z + c * length / 2, endY: at(0, length / 2) + height };
+  };
+  if (preset === 'mountain') {
+    const trail = [[0,0],[28,-44],[62,-82],[94,-116],[130,-128],[166,-95],[202,-46],[236,6],[265,55],[236,96],[198,130],[154,156],[112,142],[72,106],[35,65],[0,22]];
+    const nearestTrail = (x, z) => {
+      let best = Infinity;
+      for (let i = 0; i < trail.length - 1; i++) {
+        const a = trail[i], b = trail[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], q = dx * dx + dz * dz;
+        const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / q));
+        best = Math.min(best, Math.hypot(x - a[0] - t * dx, z - a[1] - t * dz));
+      }
+      return best;
+    };
+    // Forêt décorative en quatre lots instanciés, sans arbre ni collision dans le couloir du sentier.
+    const capacity = ({ low: 2400, med: 4200, high: 6200, ultra: 8400 })[quality] || 4200;
+    const density = ({ low: 0.23, med: 0.43, high: 0.62, ultra: 0.84 })[quality] || 0.43;
+    const trunkGeo = new THREE.CylinderGeometry(0.18, 0.3, 3.2, 5);
+    const leafGeo = new THREE.ConeGeometry(1, 1, 7);
+    const bark = mat(0x4b382a, 1), pine = mat(th.snow ? 0x718178 : 0x244b39, 0.96);
+    const trunk = new THREE.InstancedMesh(trunkGeo, bark, capacity), foliage = [0,1,2].map(() => new THREE.InstancedMesh(leafGeo, pine, capacity));
+    const dummy = new THREE.Object3D(); let trees = 0;
+    const hash = (a, b, n = 0) => { const v = Math.sin(a * 127.1 + b * 311.7 + n * 74.7) * 43758.5453; return v - Math.floor(v); };
+    for (let gx = -half + 12, ix = 0; gx < half - 12; gx += 9.8, ix++) for (let gz = -half + 12, iz = 0; gz < half - 12; gz += 9.8, iz++) {
+      if (trees >= capacity || hash(ix, iz) > density) continue;
+      const x = gx + (hash(ix, iz, 1) - 0.5) * 5.4, z = gz + (hash(ix, iz, 2) - 0.5) * 5.4;
+      if (nearestTrail(x, z) < 9) continue;
+      const scale = 0.78 + hash(ix, iz, 3) * 0.68, y = groundY(x, z), angle = hash(ix, iz, 4) * Math.PI * 2;
+      dummy.position.set(x, y + 1.6 * scale, z); dummy.rotation.set(0, angle, 0); dummy.scale.set(scale, scale, scale); dummy.updateMatrix(); trunk.setMatrixAt(trees, dummy.matrix);
+      const tiers = [[1.7, 3.6, 4.1],[1.35, 3.2, 6.2],[0.96, 2.8, 8.2]];
+      tiers.forEach(([r,h,cy], k) => {
+        dummy.position.set(x, y + cy * scale, z); dummy.rotation.set(0, angle, 0); dummy.scale.set(r * scale, h * scale, r * scale); dummy.updateMatrix(); foliage[k].setMatrixAt(trees, dummy.matrix);
+      });
+      trees++;
+    }
+    trunk.count = trees; trunk.instanceMatrix.needsUpdate = true; trunk.castShadow = false; trunk.receiveShadow = false; group.add(trunk);
+    foliage.forEach(f => { f.count = trees; f.instanceMatrix.needsUpdate = true; f.castShadow = false; f.receiveShadow = false; group.add(f); });
+
+    const dirt = mat(0x715239, 0.98);
+    const jump = (x, z, width, length, height, angle) => makeRampMesh(x, z, width, length, height, angle, dirt, 0.04);
+    jump(140, -111, 8, 14, 1.7, Math.atan2(36, 33));
+    jump(219, -20, 8, 15, 2.0, Math.atan2(34, 52));
+    jump(174, 144, 8, 13, 1.5, Math.atan2(-44, 26));
+  }
   if (preset === 'skate') {
     const texture = presetRoadTex('skate'); texture.repeat.set(22, 22);
     const concrete = new THREE.MeshStandardMaterial({ color: 0xffffff, map: texture, roughness: 0.98, side: THREE.DoubleSide });
@@ -321,10 +377,8 @@ function addPresetDetails(group, preset, api, half) {
     const curb = mat(0x9ca2a3, 0.98), rail = mat(0x7c8990, 0.32, 0.72), dark = mat(0x3b4144, 0.9), rampMat = mat(0x747c80, 0.86);
     for (const a of [-142, 142]) { addBox(0, 0.42, a, 284, 0.84, 0.7, curb); addBox(a, 0.42, 0, 0.7, 0.84, 284, curb); }
     const ramp = (x, z, width, length, height, angle = 0) => {
-      const v = [-width/2,0,-length/2, width/2,0,-length/2, -width/2,height,length/2, width/2,height,length/2, -width/2,0,length/2, width/2,0,length/2];
-      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); geo.setIndex([0,1,3,0,3,2,0,2,4,1,5,3,2,3,5,2,5,4,0,4,5,0,5,1]); geo.computeVertexNormals();
-      const m = new THREE.Mesh(geo, rampMat); m.position.set(x, groundY(x, z) + 0.05, z); m.rotation.y = angle; m.castShadow = true; m.receiveShadow = true; group.add(m);
-      addBox(x, groundY(x, z) + height + 0.09, z + Math.cos(angle) * length / 2, width, 0.12, 0.18, rail, angle);
+      const { endX, endZ, endY } = makeRampMesh(x, z, width, length, height, angle, rampMat, 0.05);
+      addBox(endX, endY + 0.09, endZ, width, 0.12, 0.18, rail, angle);
     };
     ramp(-35, -32, 20, 18, 4.2, 0.18); ramp(38, 20, 18, 15, 3.4, Math.PI * 0.55); ramp(-14, 52, 22, 20, 5.5, Math.PI * 0.48); ramp(66, -47, 14, 14, 2.8, -0.38);
     const grind = (x, z, len, angle, h = 0.75) => {
@@ -365,6 +419,32 @@ function addPresetDetails(group, preset, api, half) {
     warehouse(-38, 166, 82, 22, 16);
     warehouse(166, 12, 22, 78, 23);
     warehouse(-166, -14, 22, 70, 18);
+    // Seize usines aux silhouettes différentes, placées au-delà de la clôture du parc.
+    const extraFactories = [
+      [-206,-154,78,19,18],[-204,66,19,72,21],[206,-143,21,72,25],[210,114,84,18,16],
+      [-148,-211,74,20,23],[-78,211,86,18,17],[82,-213,68,18,20],[150,211,72,20,24],
+      [-220,-25,18,78,16],[224,18,18,82,19],[-110,-214,18,66,25],[108,216,18,70,18]
+    ];
+    extraFactories.forEach((b, i) => {
+      const [x,z,w,d,h] = b, y = groundY(x,z);
+      if (i % 4 === 0) {
+        addBox(x, y + h / 2, z, w * 0.62, h, d * 0.7, concreteWall);
+        const silo = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 6.5, h + 8, 8), rust);
+        silo.position.set(x + w * 0.38, y + (h + 8) / 2, z + d * 0.3); silo.castShadow = false; group.add(silo);
+        addBox(x + w * 0.38, y + h + 8, z + d * 0.3, 12, 0.8, 12, roofRust);
+      } else if (i % 4 === 1) {
+        addBox(x, y + h / 2, z, w, h, d, concreteWall);
+        addBox(x, y + h + 1.5, z, w * 0.78, 3, d * 0.78, rust, 0.2);
+        addBox(x + w * 0.32, y + h + 7, z - d * 0.22, 4, 12, 4, soot);
+      } else if (i % 4 === 2) {
+        const tower = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 8, h + 15, 7), rust);
+        tower.position.set(x, y + (h + 15) / 2, z); tower.castShadow = false; group.add(tower);
+        addBox(x - 6, y + h * 0.48, z, 15, 3, 15, concreteWall);
+      } else {
+        addBox(x, y + h / 2, z, w, h, d, soot, 0.12);
+        addBox(x, y + h + 4, z, w * 0.5, 8, d * 0.55, rust, Math.PI / 4);
+      }
+    });
   }
   if (preset === 'f1') {
     const start = [0, -205], next = [92, -196], dx = next[0] - start[0], dz = next[1] - start[1], len = Math.hypot(dx, dz) || 1;
@@ -374,25 +454,56 @@ function addPresetDetails(group, preset, api, half) {
       const x = start[0] + nx * (i - 3.5) + tx * (j - 0.5), z = start[1] + nz * (i - 3.5) + tz * (j - 0.5);
       addBox(x, y, z, 0.98, 0.06, 0.98, (i + j) % 2 ? white : black);
     }
-    const stand = mat(0x39434b, 0.8), seats = mat(0x69737a, 0.62, 0.16);
-    for (const side of [-1, 1]) {
-      const z0 = side < 0 ? -255 : 255;
-      for (let row = 0; row < 4; row++) addBox(0, 1.6 + row * 1.05, z0 + side * row * 3.4, 350 - row * 12, 1, 13, row % 2 ? seats : stand);
-    }
-    const crowdGeo = new THREE.SphereGeometry(0.34, 7, 6), crowdColors = [0xf0d5aa,0x3d7594,0xb94643,0xe0b843,0xd8dfe4,0x625a86,0x439276];
+    const stand = mat(0x313b46, 0.84), seats = mat(0x65717b, 0.62, 0.12);
+    const crowdGeo = new THREE.SphereGeometry(0.34, 6, 5), crowdColors = [0xf0d5aa,0x3d7594,0xb94643,0xe0b843,0xd8dfe4,0x625a86,0x439276,0xd56f38];
     const crowdMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
-    const crowd = new THREE.InstancedMesh(crowdGeo, crowdMat, 480), dummy = new THREE.Object3D(); let n = 0;
-    for (const side of [-1, 1]) for (let row = 0; row < 4; row++) for (let i = 0; i < 60; i++) {
-      dummy.position.set(-165 + i * 5.55, 3.8 + row * 1.05, (side < 0 ? -238 : 238) + side * row * 3.4); dummy.scale.setScalar(0.82 + Math.random() * 0.48); dummy.updateMatrix();
+    const crowd = new THREE.InstancedMesh(crowdGeo, crowdMat, 7200), dummy = new THREE.Object3D(); let n = 0;
+    const addPerson = (x, y, z, scale) => {
+      if (n >= crowd.instanceMatrix.count) return;
+      dummy.position.set(x, y, z); dummy.scale.setScalar(scale); dummy.updateMatrix();
       crowd.setMatrixAt(n, dummy.matrix); crowd.setColorAt(n, new THREE.Color(crowdColors[Math.floor(Math.random() * crowdColors.length)])); n++;
+    };
+    // Quatre grandes tribunes qui encerclent la piste, avec sept rangées de sièges et de foule.
+    for (const side of [-1, 1]) for (let row = 0; row < 7; row++) {
+      const y = 1.5 + row * 1.0, outward = side * (274 + row * 4.4);
+      addBox(0, y, outward, 760, 0.9, 14, row % 2 ? seats : stand);
+      addBox(outward, y, 0, 14, 0.9, 760, row % 2 ? seats : stand);
+      for (let i = 0; i < 132; i++) {
+        const along = -394 + i * 6;
+        addPerson(along, y + 0.95, side * (263 + row * 4.4), 0.7 + Math.random() * 0.42);
+        addPerson(side * (263 + row * 4.4), y + 0.95, along, 0.7 + Math.random() * 0.42);
+      }
     }
-    crowd.count = n; crowd.instanceMatrix.needsUpdate = true; crowd.instanceColor.needsUpdate = true; group.add(crowd);
+    // Deux anneaux lointains de silhouettes : la foule se prolonge jusqu’au brouillard.
+    for (const radius of [454, 585]) for (let i = 0; i < 260; i++) {
+      const a = i / 260 * Math.PI * 2;
+      for (let row = 0; row < 2; row++) {
+        const r = radius + row * 5, scale = radius > 500 ? 0.42 : 0.55;
+        addPerson(Math.cos(a) * r, 1.9 + row * 0.72, Math.sin(a) * r, scale);
+      }
+    }
+    crowd.count = n; crowd.instanceMatrix.needsUpdate = true; crowd.instanceColor.needsUpdate = true; crowd.castShadow = false; crowd.receiveShadow = false; group.add(crowd);
     const nx2 = -tz, nz2 = tx, support = mat(0x48565f, 0.38, 0.55), lights = mat(0xdde8f1, 0.3, 0.5);
     for (const side of [-1, 1]) { const x = start[0] + nx2 * side * 8.5, z = start[1] + nz2 * side * 8.5; addBox(x, y + 2.5, z, 0.45, 5, 0.45, support); }
     addBox(start[0], y + 5, start[1], 18, 0.55, 0.75, support, Math.atan2(-nz2, nx2));
     for (let i = 0; i < 8; i++) addBox(start[0] - 3.5 + i, y + 4.72, start[1], 0.5, 0.2, 0.24, lights);
   }
   if (preset === 'sky') {
+    // Un océan continu remplace entièrement la plaine; la piste de bois reste suspendue au-dessus.
+    const ocean = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), new THREE.MeshStandardMaterial({ color: 0x28788f, roughness: 0.24, metalness: 0.18, side: THREE.DoubleSide }));
+    ocean.rotation.x = -Math.PI / 2; ocean.position.y = 1.05; ocean.receiveShadow = true; group.add(ocean);
+    // Petit marécage et cimetière dans un seul coin, loin du parcours.
+    const swampMat = mat(0x48584c, 0.98), graveMat = mat(0x68706c, 0.95), deadMat = mat(0x352f2b, 0.98);
+    const island = new THREE.Mesh(new THREE.CircleGeometry(1, 40), swampMat); island.rotation.x = -Math.PI / 2; island.scale.set(32, 23, 1); island.position.set(-292, 1.34, 282); group.add(island);
+    for (let i = 0; i < 6; i++) {
+      const x = -306 + i * 5.2, z = 278 + (i % 2) * 5;
+      const stone = new THREE.Mesh(new THREE.BoxGeometry(1.35, 1.6, 0.38), graveMat); stone.position.set(x, 2.18, z); stone.rotation.z = (i % 2 ? 1 : -1) * 0.1; group.add(stone);
+      addBox(x, 2.9, z, 0.32, 0.72, 0.42, graveMat);
+    }
+    for (const [x,z,h] of [[-309,286,8],[-280,273,6],[-290,299,7]]) {
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.42,h,6), deadMat); trunk.position.set(x,1.34+h/2,z); trunk.rotation.z = 0.08; group.add(trunk);
+      for (const side of [-1,1]) addBox(x + side * 1.1, 1.34 + h * 0.68, z, 2.4, 0.18, 0.2, deadMat, side * 0.34);
+    }
     const path = [[0,0],[48,-16],[82,-72],[132,-102],[192,-84],[224,-28],[210,38],[162,78],[106,50],[55,83],[0,52],[-40,12],[-28,-44],[24,-84],[76,-72],[0,0]];
     const poleMat = mat(0x694126, 0.92), ropeMat = mat(0x4b3426, 0.96), barrelMat = mat(0xc76025, 0.84), bandMat = mat(0x282d31, 0.48, 0.45);
     const rails = [[], []];
@@ -493,15 +604,21 @@ export function onLane(x, z) {
 
 /* ================================================================ monde */
 export function createWorld(scene, id, quality = 'med', real = null) {
-  const th = THEMES[id] || THEMES.day;
+  const th = Object.assign({}, THEMES[id] || THEMES.day);
+  const permanentSnow = !!(real && real.synthetic && real.preset === 'snow');
+  if (permanentSnow) { th.snowOnGround = true; th.ground = 0xe8f0f5; th.lawn = 0xf5f8fa; th.walk = 0xe1e9ef; th.curb = 0xf8fafb; th.hill = 0xcbd7df; }
   const scenicMountains = !!(real && real.synthetic && real.preset === 'mountain');
+  const skyOcean = !!(real && real.synthetic && real.preset === 'sky');
+  const scenicF1 = !!(real && real.synthetic && real.preset === 'f1');
+  if (scenicF1 && !th.snow) { th.ground = 0x636a70; th.lawn = 0x72787d; th.road = 0x2d3238; th.walk = 0x72787d; th.curb = 0xb0b4b7; th.hill = 0x454c54; }
+  const rampDefs = [];
   const group = new THREE.Group();
   scene.add(group);
   const colliders = [];
   const shadows = shadowsOn(quality);
 
   scene.background = new THREE.Color(th.fog);
-  scene.fog = new THREE.Fog(th.fog, th.fogNear, scenicMountains ? Math.max(th.fogFar, 950) : th.fogFar);
+  scene.fog = new THREE.Fog(th.fog, th.fogNear, scenicMountains ? Math.max(th.fogFar, 950) : scenicF1 ? Math.max(th.fogFar, 950) : th.fogFar);
 
   /* ---- matériaux */
   const std = (o) => new THREE.MeshStandardMaterial(o);
@@ -509,13 +626,13 @@ export function createWorld(scene, id, quality = 'med', real = null) {
   const gTex = detailTex((quality === 'low' ? 256 : 512) * Math.min(4, TRES())); gTex.repeat.set(GS / 14, GS / 14);
   const lTex = gTex.clone(); lTex.needsUpdate = true; lTex.repeat.set(PARK * 2 / 14, PARK * 2 / 14);
   const groundMat = std({ color: th.ground, roughness: 1, map: gTex });
-  if (th.patchy) patchySnow(groundMat, th.patchy);                 // printemps : neige par plaques
-  if (natureOn() && !th.snow) grassyGround(groundMat, th);          // v9.25 : plaques sèches / grasses, brins fins de près
+  if (th.patchy && !permanentSnow) patchySnow(groundMat, th.patchy); // printemps : neige par plaques
+  if (natureOn() && !th.snow && !permanentSnow && !scenicF1) grassyGround(groundMat, th); // herbe naturelle, sauf sur la piste F1 et la neige
   if (premium()) try {                                                  // relief fin et rugosité variable du sol (herbe / neige)
     const gp = groundPBR(); gp.normal.repeat.copy(gTex.repeat); gp.rough.repeat.copy(gTex.repeat);
     groundMat.normalMap = gp.normal; groundMat.roughnessMap = gp.rough; groundMat.normalScale.set(0.7, 0.7);
   } catch (e) { console.warn('Sol Premium indisponible :', e); }
-  const lawnMat = layer(std({ color: th.lawn, roughness: 1, map: lTex }), -1);
+  const lawnMat = layer(std({ color: permanentSnow ? 0xf5f8fa : th.lawn, roughness: 1, map: lTex }), -1);
   const roadMat = layer(std({ color: th.road, roughness: 0.92 }), -2);
   const walkMat = std({ color: th.walk, roughness: 1 });
   const curbMat = std({ color: th.curb, roughness: 0.7 });
@@ -739,17 +856,19 @@ export function createWorld(scene, id, quality = 'med', real = null) {
   /* ---- collines à l'horizon : relief continu (maillage fin, ombrage lisse, couleur par altitude) */
   {
     const vistaPreset = real && real.synthetic ? real.preset : null;
-    const R0 = real && real.synthetic ? real.half * (vistaPreset === 'mountain' ? 1.02 : vistaPreset === 'skate' ? 1.16 : 1.3) : 290, R1 = R0 + (vistaPreset === 'mountain' ? 720 : 500);
+    const R0 = real && real.synthetic ? real.half * (vistaPreset === 'mountain' ? 0.86 : vistaPreset === 'skate' ? 1.16 : 1.3) : 290, R1 = R0 + (vistaPreset === 'mountain' ? 900 : 500);
     const NA = quality === 'low' ? 180 : quality === 'med' ? 320 : quality === 'high' ? 480 : 800;     // segments autour
     const NR = quality === 'low' ? 36 : quality === 'med' ? 64 : quality === 'high' ? 96 : 160;        // segments en profondeur
     const pos = [], col = [], idx = [];
-    const base = new THREE.Color(th.hill), c = new THREE.Color();
+    const base = new THREE.Color(vistaPreset === 'mountain' ? (th.snow ? 0x9ca9b2 : 0x40594f) : vistaPreset === 'f1' ? 0x414a53 : th.hill), c = new THREE.Color();
     const hFn = (x, z, r) => {
       const ramp = Math.min(1, Math.max(0, (r - R0) / 110)); const sm = ramp * ramp * (3 - 2 * ramp);
       const big = fbm(x * 0.0055 + 3.1, z * 0.0055 - 1.7, 5);
       const ridge = 1 - Math.abs(fbm(x * 0.011 - 8.3, z * 0.011 + 4.2, 4) * 2 - 1);   // crêtes
-      if (vistaPreset === 'mountain') return sm * (34 + 230 * Math.pow(big, 1.35) + 105 * ridge * ridge);
+      if (vistaPreset === 'mountain') return sm * (68 + 310 * Math.pow(big, 1.28) + 145 * ridge * ridge);
       if (vistaPreset === 'skate') return sm * (2 + 3 * big * big + 1.5 * ridge * ridge);
+      if (vistaPreset === 'f1') return sm * (0.5 + 1.2 * big * big);
+      if (vistaPreset === 'sky') return 0;
       return sm * (18 + 105 * Math.pow(big, 1.5) + 34 * ridge * ridge);
     };
     for (let ir = 0; ir <= NR; ir++) {
@@ -780,16 +899,17 @@ export function createWorld(scene, id, quality = 'med', real = null) {
   let realApi = null;
   const customRoadTex = real && real.synthetic && ['snow', 'skate', 'mountain', 'sky'].includes(real.preset) ? (theme, kind, tr) => presetRoadTex(real.preset, tr) : roadTex;
   if (real) realApi = buildReal(group, th, quality, real, { wallTex, laneTex, roadTex: customRoadTex, layer, groundMat, GS });
-  if (real && real.synthetic) addPresetDetails(group, real.preset, realApi, real.half);
+  if (real && real.synthetic) addPresetDetails(group, real.preset, realApi, real.half, quality, rampDefs);
   const tr = realApi && !(real && real.synthetic && real.preset !== 'city') ? createTraffic(group, real, th, quality, makeCyclist, th.night != null ? th.night : (id === 'neon' || id === 'sunset'), realApi.deckY) : null;   // piétons, voitures, cyclistes
 
   /* ---- ciel, nuages, étoiles, neige */
   const sky = natureOn() ? natureSky(th) : skyMesh(th); group.add(sky);
   const clouds = [];
-  if (th.clouds && quality !== 'low') {
-    const cg = new THREE.SphereGeometry(1, 64, 45);
+  if (th.clouds && (quality !== 'low' || skyOcean)) {
+    const cloudCount = quality === 'low' ? 10 : 16;
+    const cg = new THREE.SphereGeometry(1, quality === 'low' ? 24 : 64, quality === 'low' ? 16 : 45);
     const cm = new THREE.MeshBasicMaterial({ color: th.clouds.col, transparent: true, opacity: th.clouds.op, fog: false, depthWrite: false });
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < cloudCount; i++) {
       const c = new THREE.Group();
       const n = 4 + Math.floor(rng(i) * 3);
       for (let j = 0; j < n; j++) {
@@ -1003,6 +1123,14 @@ export function createWorld(scene, id, quality = 'med', real = null) {
   return {
     id, theme: th, group, colliders, size: real ? real.half * 2 : SIZE, spawn: realApi ? realApi.spawn : SPAWN, tick, dispose, cyclists, hitCyclist, knock,
     real: !!realApi, api: realApi, preset: real && real.synthetic ? real.preset : null,
+    rampAt(x, z) {
+      for (const r of rampDefs) {
+        const dx = x - r.x, dz = z - r.z, c = Math.cos(r.angle), s = Math.sin(r.angle);
+        const lx = c * dx - s * dz, lz = s * dx + c * dz;
+        if (Math.abs(lx) <= r.width / 2 && Math.abs(lz) <= r.length / 2) return { y: (realApi && realApi.elev ? realApi.elev(x, z) : 0) + r.baseOffset + r.height * (lz / r.length + 0.5), t: lz / r.length + 0.5, dirX: Math.sin(r.angle), dirZ: Math.cos(r.angle) };
+      }
+      return null;
+    },
     setTraffic: v => { traffic = v; tr && tr.setVisible(v); },
     hitMobile, knockMobile, mobileGap, traffic: tr,
     night: th.night != null ? th.night : (id === 'neon' || id === 'sunset')

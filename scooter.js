@@ -163,6 +163,7 @@ export function makeScooter() {
   const head2 = add(body, new THREE.SphereGeometry(0.105, 40, 30), skin, 0, 1.6, 0.14);
   const hel = add(body, new THREE.SphereGeometry(0.125, 40, 30, 0, Math.PI * 2, 0, Math.PI * 0.62), helmet, 0, 1.62, 0.14);
   const hairStyles = {};
+  let landingAt = -1e9, landingStrength = 0;
   const makeHair = (name, length) => {
     const g = new THREE.Group(); body.add(g);
     const cap = new THREE.Mesh(new THREE.SphereGeometry(0.108, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.48), hairMat);
@@ -173,7 +174,27 @@ export function makeScooter() {
     }
     hairStyles[name] = g;
   };
-  makeHair('short', 0.05); makeHair('medium', 0.18); makeHair('long', 0.38);
+  makeHair('short', 0.05); makeHair('medium', 0.18);
+  {
+    // Chevelure longue complète à l’arrière, avec des mèches souples et ondulées aux pointes.
+    const g = new THREE.Group(); g.position.set(0, 1.42, 0.14); body.add(g);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.108, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.48), hairMat);
+    cap.position.set(0, 0.205, 0); cap.scale.y = 1.08; g.add(cap);
+    const back = new THREE.Mesh(new THREE.SphereGeometry(0.104, 24, 16), hairMat);
+    back.position.set(0, -0.025, 0.055); back.scale.set(1.02, 2.05, 0.72); g.add(back);
+    for (let i = 0; i < 11; i++) {
+      const u = i / 10, x = -0.097 + u * 0.194, side = i % 2 ? 1 : -1;
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(x * 0.84, 0.13, 0.025),
+        new THREE.Vector3(x * 0.98, -0.08, 0.078),
+        new THREE.Vector3(x * 1.08, -0.30, 0.105 + side * 0.012),
+        new THREE.Vector3(x * 1.05 + side * 0.008, -0.50 + (i % 3) * 0.018, 0.075 + side * 0.025)
+      ]);
+      const lock = new THREE.Mesh(new THREE.TubeGeometry(curve, 18, 0.016, 5, false), hairMat);
+      g.add(lock);
+    }
+    hairStyles.long = g;
+  }
   const glassesGroup = new THREE.Group(); glassesGroup.position.set(0, 1.61, 0.025); glassesGroup.rotation.y = Math.PI; body.add(glassesGroup);
   for (const sx of [-1, 1]) {
     const lens = new THREE.Mesh(new THREE.TorusGeometry(0.043, 0.006, 7, 20), glassesMat);
@@ -233,6 +254,7 @@ export function makeScooter() {
   return {
     root, lean, steer, wF, wR, head, spot, tailLight, lamp, tailM, mats, rider,
     setView, setAccent, setCup, setRider,
+    setLanding(strength = 1) { landingAt = performance.now(); landingStrength = Math.max(0, Math.min(1, strength)); },
     // chute : p = 0 (debout) → 1 (au sol), side = ±1 (côté de la chute)
     setFall(p, side = 1) {
       root.rotation.z = side * p * 1.38;
@@ -244,6 +266,9 @@ export function makeScooter() {
     update(steerNorm, spinF, headOn, tailOn, braking, speed) {
       const ang = -steerNorm * 0.62;               // + steer = droite -> rotation Y négative
       steer.rotation.y = ang;
+      const landingT = (performance.now() - landingAt) / 480;
+      lean.position.y = landingT >= 0 && landingT < 1 ? Math.sin(landingT * Math.PI) * landingStrength * 0.15 : 0;
+      if (hairStyles.long) { const wind = Math.min(1, speed / 8), t = performance.now() * 0.002; hairStyles.long.rotation.x = -0.06 - wind * 0.28 + Math.sin(t) * 0.025; hairStyles.long.rotation.z = Math.sin(t * 0.7) * (0.018 + wind * 0.035); hairStyles.long.rotation.y = Math.sin(t * 0.55) * 0.025; }
       updateArms(ang);
       wF.rotation.x -= spinF; wR.rotation.x -= spinF;
       const k = Math.min(1, speed / 6);

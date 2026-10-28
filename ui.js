@@ -52,8 +52,10 @@ export function buildPanel(root, cb) {
   let g = group(body, 'Monde'); const wp = h('div', 'worlds'); g.append(wp); worldPicker(wp);
   g.append(h('label', 'lbl', 'Parcours de la ville imaginaire'));
   const presetRow = h('div'); g.append(presetRow); segment(presetRow, 'preset', [['city', '🏙 Ville + pont'], ['skate', '🛹 Skatepark'], ['mountain', '⛰ Sentier montagne'], ['f1', '🏎 Circuit F1'], ['snow', '❄️ Motoneige'], ['sky', '☁️ Relais dans le ciel']]);
-  g.append(h('label', 'lbl', 'Saison (ville imaginaire et carte réelle)'));
+  g.append(h('label', 'lbl', 'Saison (toutes les cartes)'));
   const rs = h('div'); g.append(rs); segment(rs, 'season', [['summer', '☀️ Été'], ['winter', '❄️ Hiver'], ['spring', '🌱 Printemps'], ['autumn', '🍂 Automne']]);
+  range(g, 'Température de l’air', 'temperature', -20, 35, 1, v => v + ' °C');
+  g.append(h('p', 'hint', 'Sur la neige et en hiver, une température plus froide rend les glissades et les chutes plus probables. La piste de motoneige garde sa neige au sol toute l’année.'));
   g.append(h('label', 'lbl', 'Moment de la journée'));
   const rm = h('div'); g.append(rm); segment(rm, 'tod', [['day', '🌞 Jour'], ['dusk', '🌇 Soir'], ['night', '🌙 Nuit']]);
   g.append(h('label', 'lbl', 'Lumière des bâtiments et des lampes'));
@@ -65,7 +67,7 @@ export function buildPanel(root, cb) {
   toggle(g, 'Aimant à la route (en roulant vraiment : cap et position suivent la route, le guidon n’est plus utilisé)', 'roadSnap');
   g.append(h('label', 'lbl', 'Taille de la carte réelle'));
   const rr = h('div'); g.append(rr); segment(rr, 'mapRadius', [['800', '800 m (chargement local rapide)'], ['1500', '1,5 km (zone élargie)']]);
-  g.append(h('p', 'hint', 'Version 3D : v9.40 · 6 parcours'));
+  g.append(h('p', 'hint', 'Version 3D : v9.41 · 6 parcours'));
   const nc = h('button', 'btn', '🎲 Nouvelle ville imaginaire (aléatoire)'); nc.type = 'button'; nc.onclick = () => cb.newCity(); g.append(nc);
   const rc = h('button', 'btn', '📍 Recharger la carte à ma position'); rc.type = 'button'; rc.onclick = () => cb.recenter(false); g.append(rc);
   const rf = h('button', 'btn ghost', '🧹 Tout re-télécharger (ignorer la mémoire)'); rf.type = 'button'; rf.onclick = () => cb.recenter(true); g.append(rf);
