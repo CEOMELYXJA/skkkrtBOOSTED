@@ -264,6 +264,138 @@ function bannerTex(th) {
   return t;
 }
 
+
+function presetRoadTex(preset, tr = 1) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 512;
+  const g = c.getContext('2d');
+  if (preset === 'snow') {
+    const gr = g.createLinearGradient(0, 0, 256, 512); gr.addColorStop(0, '#f4f8fa'); gr.addColorStop(0.55, '#dfe9ef'); gr.addColorStop(1, '#edf3f6');
+    g.fillStyle = gr; g.fillRect(0, 0, 256, 512);
+    for (let i = 0; i < 1800; i++) { const x = Math.random() * 256, y = Math.random() * 512, r = 0.3 + Math.random() * 1.6; g.fillStyle = Math.random() > 0.48 ? 'rgba(255,255,255,.35)' : 'rgba(112,142,164,.09)'; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
+    g.strokeStyle = 'rgba(255,255,255,.24)'; g.lineWidth = 2;
+    for (let i = 0; i < 12; i++) { const y = i * 44 + Math.random() * 18; g.beginPath(); g.moveTo(0, y); g.bezierCurveTo(70, y - 8, 160, y + 8, 256, y - 2); g.stroke(); }
+  } else if (preset === 'mountain') {
+    g.fillStyle = '#756b5b'; g.fillRect(0, 0, 256, 512);
+    for (let i = 0; i < 3600; i++) { const n = Math.floor(72 + Math.random() * 118); g.fillStyle = 'rgba(' + n + ',' + (n - 4) + ',' + (n - 12) + ',' + (0.08 + Math.random() * 0.28) + ')'; g.beginPath(); g.ellipse(Math.random() * 256, Math.random() * 512, 0.6 + Math.random() * 2.5, 0.4 + Math.random() * 1.8, Math.random(), 0, Math.PI * 2); g.fill(); }
+  } else if (preset === 'sky') {
+    for (let y = 0; y < 512; y += 32) {
+      const v = 82 + Math.floor(Math.random() * 36);
+      g.fillStyle = 'rgb(' + (v + 54) + ',' + (v + 28) + ',' + (v + 5) + ')'; g.fillRect(0, y, 256, 32);
+      g.fillStyle = 'rgba(48,25,12,.56)'; g.fillRect(0, y + 29, 256, 3);
+      g.strokeStyle = 'rgba(255,220,166,.18)'; g.lineWidth = 1;
+      for (let k = 0; k < 7; k++) { const x = Math.random() * 256; g.beginPath(); g.moveTo(x, y + 3); g.bezierCurveTo(x + 12, y + 9, x - 8, y + 20, x + 5, y + 28); g.stroke(); }
+      for (const x of [16, 240]) { g.fillStyle = 'rgba(32,24,18,.75)'; g.beginPath(); g.arc(x, y + 15, 2.3, 0, Math.PI * 2); g.fill(); }
+    }
+  } else {
+    g.fillStyle = '#858a8d'; g.fillRect(0, 0, 256, 512);
+    for (let i = 0; i < 4200; i++) {
+      const v = Math.floor(100 + Math.random() * 100); g.fillStyle = 'rgba(' + v + ',' + v + ',' + (v + 2) + ',' + (0.06 + Math.random() * 0.2) + ')';
+      g.fillRect(Math.random() * 256, Math.random() * 512, 0.5 + Math.random() * 2, 0.5 + Math.random() * 2);
+    }
+    g.strokeStyle = 'rgba(44,49,53,.28)'; g.lineWidth = 2;
+    for (const y of [128, 384]) { g.beginPath(); g.moveTo(0, y); g.lineTo(256, y); g.stroke(); }
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANI();
+  return t;
+}
+function graffitiTexture() {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+  const g = c.getContext('2d'); g.fillStyle = '#41474a'; g.fillRect(0, 0, 512, 128);
+  g.filter = 'blur(1.5px)';
+  const colors = ['#29aab3', '#e26650', '#d6b64d', '#8666a8', '#e8e3d2'];
+  for (let i = 0; i < 30; i++) { g.strokeStyle = colors[i % colors.length]; g.globalAlpha = 0.35 + Math.random() * 0.38; g.lineWidth = 3 + Math.random() * 12; g.beginPath(); g.moveTo(Math.random() * 512, Math.random() * 128); g.bezierCurveTo(Math.random() * 512, Math.random() * 128, Math.random() * 512, Math.random() * 128, Math.random() * 512, Math.random() * 128); g.stroke(); }
+  g.globalAlpha = 1; g.filter = 'none';
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANI(); return t;
+}
+function addPresetDetails(group, preset, api, half) {
+  const mat = (color, roughness = 0.85, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness, side: THREE.DoubleSide });
+  const addBox = (x, y, z, sx, sy, sz, material, angle = 0) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material); m.position.set(x, y, z); m.rotation.y = angle; m.castShadow = true; m.receiveShadow = true; group.add(m); return m;
+  };
+  const groundY = (x, z) => api ? api.elev(x, z) : 0;
+  const deckY = (x, z) => { const y = api && api.deckY(x, z); return y == null ? groundY(x, z) : y; };
+  if (preset === 'skate') {
+    const texture = presetRoadTex('skate'); texture.repeat.set(22, 22);
+    const concrete = new THREE.MeshStandardMaterial({ color: 0xffffff, map: texture, roughness: 0.98, side: THREE.DoubleSide });
+    const slab = new THREE.Mesh(new THREE.PlaneGeometry(286, 286), concrete); slab.rotation.x = -Math.PI / 2; slab.position.set(0, groundY(0, 0) + 0.012, 0); slab.receiveShadow = true; group.add(slab);
+    const curb = mat(0x9ca2a3, 0.98), rail = mat(0x7c8990, 0.32, 0.72), dark = mat(0x3b4144, 0.9), rampMat = mat(0x747c80, 0.86);
+    for (const a of [-142, 142]) { addBox(0, 0.42, a, 284, 0.84, 0.7, curb); addBox(a, 0.42, 0, 0.7, 0.84, 284, curb); }
+    const ramp = (x, z, width, length, height, angle = 0) => {
+      const v = [-width/2,0,-length/2, width/2,0,-length/2, -width/2,height,length/2, width/2,height,length/2, -width/2,0,length/2, width/2,0,length/2];
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); geo.setIndex([0,1,3,0,3,2,0,2,4,1,5,3,2,3,5,2,5,4,0,4,5,0,5,1]); geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, rampMat); m.position.set(x, groundY(x, z) + 0.05, z); m.rotation.y = angle; m.castShadow = true; m.receiveShadow = true; group.add(m);
+      addBox(x, groundY(x, z) + height + 0.09, z + Math.cos(angle) * length / 2, width, 0.12, 0.18, rail, angle);
+    };
+    ramp(-35, -32, 20, 18, 4.2, 0.18); ramp(38, 20, 18, 15, 3.4, Math.PI * 0.55); ramp(-14, 52, 22, 20, 5.5, Math.PI * 0.48); ramp(66, -47, 14, 14, 2.8, -0.38);
+    const grind = (x, z, len, angle, h = 0.75) => {
+      const y = groundY(x, z);
+      const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = angle; group.add(g);
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, len, 10), rail); bar.rotation.z = Math.PI / 2; bar.position.y = h; g.add(bar);
+      for (const sx of [-len * 0.38, len * 0.38]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, h, 8), rail); leg.position.set(sx, h / 2, 0); g.add(leg); }
+    };
+    grind(4, -24, 24, 0.2); grind(-59, 12, 22, 1.02); grind(41, 59, 20, -0.45);
+    for (let i = 0; i < 5; i++) addBox(-73 + i * 3.3, groundY(-60, 45) + 0.18 + i * 0.16, 45, 3.2, 0.32, 6, dark);
+    const wall = addBox(0, 2.5, -140.4, 94, 5, 0.5, dark);
+    const muralMat = new THREE.MeshStandardMaterial({ map: graffitiTexture(), roughness: 1, side: THREE.DoubleSide });
+    const mural = new THREE.Mesh(new THREE.PlaneGeometry(86, 3.2), muralMat); mural.position.set(0, 2.5, -140.12); group.add(mural);
+    wall.castShadow = true;
+  }
+  if (preset === 'f1') {
+    const start = [0, -205], next = [92, -196], dx = next[0] - start[0], dz = next[1] - start[1], len = Math.hypot(dx, dz) || 1;
+    const tx = dx / len, tz = dz / len, nx = -tz, nz = tx, y = groundY(start[0], start[1]) + 0.11;
+    const black = mat(0x15191d, 0.8), white = mat(0xf3f2ed, 0.8);
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 2; j++) {
+      const x = start[0] + nx * (i - 3.5) + tx * (j - 0.5), z = start[1] + nz * (i - 3.5) + tz * (j - 0.5);
+      addBox(x, y, z, 0.98, 0.06, 0.98, (i + j) % 2 ? white : black);
+    }
+    const stand = mat(0x39434b, 0.8), seats = mat(0x69737a, 0.62, 0.16);
+    for (const side of [-1, 1]) {
+      const z0 = side < 0 ? -255 : 255;
+      for (let row = 0; row < 4; row++) addBox(0, 1.6 + row * 1.05, z0 + side * row * 3.4, 350 - row * 12, 1, 13, row % 2 ? seats : stand);
+    }
+    const crowdGeo = new THREE.SphereGeometry(0.34, 7, 6), crowdColors = [0xf0d5aa,0x3d7594,0xb94643,0xe0b843,0xd8dfe4,0x625a86,0x439276];
+    const crowdMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
+    const crowd = new THREE.InstancedMesh(crowdGeo, crowdMat, 480), dummy = new THREE.Object3D(); let n = 0;
+    for (const side of [-1, 1]) for (let row = 0; row < 4; row++) for (let i = 0; i < 60; i++) {
+      dummy.position.set(-165 + i * 5.55, 3.8 + row * 1.05, (side < 0 ? -238 : 238) + side * row * 3.4); dummy.scale.setScalar(0.82 + Math.random() * 0.48); dummy.updateMatrix();
+      crowd.setMatrixAt(n, dummy.matrix); crowd.setColorAt(n, new THREE.Color(crowdColors[Math.floor(Math.random() * crowdColors.length)])); n++;
+    }
+    crowd.count = n; crowd.instanceMatrix.needsUpdate = true; crowd.instanceColor.needsUpdate = true; group.add(crowd);
+    const nx2 = -tz, nz2 = tx, support = mat(0x48565f, 0.38, 0.55), lights = mat(0xdde8f1, 0.3, 0.5);
+    for (const side of [-1, 1]) { const x = start[0] + nx2 * side * 8.5, z = start[1] + nz2 * side * 8.5; addBox(x, y + 2.5, z, 0.45, 5, 0.45, support); }
+    addBox(start[0], y + 5, start[1], 18, 0.55, 0.75, support, Math.atan2(-nz2, nx2));
+    for (let i = 0; i < 8; i++) addBox(start[0] - 3.5 + i, y + 4.72, start[1], 0.5, 0.2, 0.24, lights);
+  }
+  if (preset === 'sky') {
+    const path = [[0,0],[48,-16],[82,-72],[132,-102],[192,-84],[224,-28],[210,38],[162,78],[106,50],[55,83],[0,52],[-40,12],[-28,-44],[24,-84],[76,-72],[0,0]];
+    const poleMat = mat(0x694126, 0.92), ropeMat = mat(0x4b3426, 0.96), barrelMat = mat(0xc76025, 0.84), bandMat = mat(0x282d31, 0.48, 0.45);
+    const rails = [[], []];
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = path[i], b = path[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz) || 1, nx = -dz / len, nz = dx / len, steps = Math.max(1, Math.ceil(len / 18));
+      for (let sideIndex = 0; sideIndex < 2; sideIndex++) {
+        const side = sideIndex === 0 ? -1 : 1;
+        for (let k = 0; k <= steps; k++) {
+          if (i && k === 0) continue;
+          const t = k / steps, cx = a[0] + dx * t, cz = a[1] + dz * t, x = cx + nx * side * 3.6, z = cz + nz * side * 3.6, deck = deckY(cx, cz);
+          addBox(x, deck + 0.78, z, 0.16, 1.55, 0.16, poleMat);
+          rails[sideIndex].push([x, deck + 1.35, z]);
+        }
+      }
+    }
+    const rope = (a, b) => {
+      const A = new THREE.Vector3(a[0], a[1], a[2]), B = new THREE.Vector3(b[0], b[1], b[2]), curve = new THREE.QuadraticBezierCurve3(A, A.clone().lerp(B, 0.5).add(new THREE.Vector3(0, -0.28, 0)), B);
+      const m = new THREE.Mesh(new THREE.TubeGeometry(curve, 8, 0.045, 5, false), ropeMat); group.add(m);
+    };
+    for (const side of rails) { for (let i = 0; i < side.length - 1; i++) rope(side[i], side[i + 1]); if (side.length > 2) rope(side[side.length - 1], side[0]); }
+    for (const [x, z] of [[58,-42],[204,10],[-8,43],[152,65]]) {
+      const y = deckY(x,z) + 0.12, barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.52, 1.05, 12), barrelMat); barrel.position.set(x,y + 0.53,z); barrel.castShadow = true; group.add(barrel);
+      for (const yy of [0.27,0.76]) { const band = new THREE.Mesh(new THREE.TorusGeometry(0.49,0.055,8,18), bandMat); band.rotation.x = Math.PI / 2; band.position.set(x,y + yy,z); group.add(band); }
+    }
+    for (const [x,z] of [[-145,-28],[247,86],[-92,116],[104,-139]]) {
+      const support = groundY(x,z), pole = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.68,Math.max(1,54-support),8), poleMat); pole.position.set(x,support + Math.max(1,54-support)/2,z); pole.castShadow = true; group.add(pole);
+    }
+  }
+}
 function skyMesh(th) {
   const sp = new THREE.Vector3(...th.sun.pos).normalize();
   const mat = new THREE.ShaderMaterial({
@@ -616,8 +748,10 @@ export function createWorld(scene, id, quality = 'med', real = null) {
 
   /* ---- carte réelle (OpenStreetMap) : bâtiments, routes, eau, arbres construits par morceaux */
   let realApi = null;
-  if (real) realApi = buildReal(group, th, quality, real, { wallTex, laneTex, roadTex, layer, groundMat, GS });
-  const tr = realApi ? createTraffic(group, real, th, quality, makeCyclist, th.night != null ? th.night : (id === 'neon' || id === 'sunset'), realApi.deckY) : null;   // piétons, voitures, cyclistes
+  const customRoadTex = real && real.synthetic && ['snow', 'skate', 'mountain', 'sky'].includes(real.preset) ? (theme, kind, tr) => presetRoadTex(real.preset, tr) : roadTex;
+  if (real) realApi = buildReal(group, th, quality, real, { wallTex, laneTex, roadTex: customRoadTex, layer, groundMat, GS });
+  if (real && real.synthetic) addPresetDetails(group, real.preset, realApi, real.half);
+  const tr = realApi && !(real && real.synthetic && real.preset !== 'city') ? createTraffic(group, real, th, quality, makeCyclist, th.night != null ? th.night : (id === 'neon' || id === 'sunset'), realApi.deckY) : null;   // piétons, voitures, cyclistes
 
   /* ---- ciel, nuages, étoiles, neige */
   const sky = natureOn() ? natureSky(th) : skyMesh(th); group.add(sky);
@@ -838,7 +972,7 @@ export function createWorld(scene, id, quality = 'med', real = null) {
 
   return {
     id, theme: th, group, colliders, size: real ? real.half * 2 : SIZE, spawn: realApi ? realApi.spawn : SPAWN, tick, dispose, cyclists, hitCyclist, knock,
-    real: !!realApi, api: realApi,
+    real: !!realApi, api: realApi, preset: real && real.synthetic ? real.preset : null,
     setTraffic: v => { traffic = v; tr && tr.setVisible(v); },
     hitMobile, knockMobile, mobileGap, traffic: tr,
     night: th.night != null ? th.night : (id === 'neon' || id === 'sunset')

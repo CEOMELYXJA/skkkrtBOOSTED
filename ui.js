@@ -51,7 +51,7 @@ export function buildPanel(root, cb) {
 
   let g = group(body, 'Monde'); const wp = h('div', 'worlds'); g.append(wp); worldPicker(wp);
   g.append(h('label', 'lbl', 'Parcours de la ville imaginaire'));
-  const presetRow = h('div'); g.append(presetRow); segment(presetRow, 'preset', [['city', '🏙 Ville + pont'], ['skate', '🛹 Skatepark'], ['mountain', '⛰ Sentier montagne'], ['f1', '🏎 Circuit F1'], ['snow', '❄️ Motoneige']]);
+  const presetRow = h('div'); g.append(presetRow); segment(presetRow, 'preset', [['city', '🏙 Ville + pont'], ['skate', '🛹 Skatepark'], ['mountain', '⛰ Sentier montagne'], ['f1', '🏎 Circuit F1'], ['snow', '❄️ Motoneige'], ['sky', '☁️ Relais dans le ciel']]);
   g.append(h('label', 'lbl', 'Saison (ville imaginaire et carte réelle)'));
   const rs = h('div'); g.append(rs); segment(rs, 'season', [['summer', '☀️ Été'], ['winter', '❄️ Hiver'], ['spring', '🌱 Printemps'], ['autumn', '🍂 Automne']]);
   g.append(h('label', 'lbl', 'Moment de la journée'));
@@ -65,10 +65,20 @@ export function buildPanel(root, cb) {
   toggle(g, 'Aimant à la route (en roulant vraiment : cap et position suivent la route, le guidon n’est plus utilisé)', 'roadSnap');
   g.append(h('label', 'lbl', 'Taille de la carte réelle'));
   const rr = h('div'); g.append(rr); segment(rr, 'mapRadius', [['800', '800 m (chargement local rapide)'], ['1500', '1,5 km (zone élargie)']]);
-  g.append(h('p', 'hint', 'Version 3D : v9.34'));
+  g.append(h('p', 'hint', 'Version 3D : v9.40 · 6 parcours'));
   const nc = h('button', 'btn', '🎲 Nouvelle ville imaginaire (aléatoire)'); nc.type = 'button'; nc.onclick = () => cb.newCity(); g.append(nc);
   const rc = h('button', 'btn', '📍 Recharger la carte à ma position'); rc.type = 'button'; rc.onclick = () => cb.recenter(false); g.append(rc);
   const rf = h('button', 'btn ghost', '🧹 Tout re-télécharger (ignorer la mémoire)'); rf.type = 'button'; rf.onclick = () => cb.recenter(true); g.append(rf);
+
+  g = group(body, 'Personnage');
+  g.append(h('label', 'lbl', 'Cheveux et casque'));
+  const hair = h('div'); g.append(hair); segment(hair, 'riderHair', [['helmet', '🪖 Casque'], ['bald', 'Crâne rasé'], ['short', 'Cheveux courts'], ['medium', 'Mi-longs'], ['long', 'Très longs']]);
+  toggle(g, 'Lunettes', 'riderGlasses');
+  g.append(h('label', 'lbl', 'Teint'));
+  const skin = h('div'); g.append(skin); segment(skin, 'riderSkin', [['light', 'Peau claire'], ['dark', 'Peau foncée']]);
+  const vest = field(g, 'Couleur du gilet'); const vestColor = h('input'); vestColor.type = 'color'; vestColor.value = settings.riderVest; vestColor.setAttribute('aria-label', 'Couleur du gilet'); vest.append(vestColor);
+  vestColor.addEventListener('input', () => set('riderVest', vestColor.value));
+  syncs.push(() => { vestColor.value = settings.riderVest || '#202a36'; });
 
   g = group(body, 'Jeu');
   const gm = h('div'); g.append(gm); segment(gm, 'gameMode', [['ctf', '🚩 Capture de drapeaux'], ['free', 'Balade libre']]);

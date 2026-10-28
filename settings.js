@@ -18,7 +18,11 @@ export const FONTS = [
 export const DEFAULTS = {
   world: 'day',
   seed: 0,             // numéro de la ville imaginaire (0 = à tirer au hasard une fois)
-  preset: 'city',      // parcours imaginaire : city | skate | mountain | f1 | snow
+  preset: 'city',      // parcours imaginaire : city | skate | mountain | f1 | snow | sky
+  riderHair: 'helmet', // helmet | bald | short | medium | long
+  riderGlasses: false,
+  riderSkin: 'light',
+  riderVest: '#202a36',
   mapRadius: '800',    // carte réelle : demi-côté en mètres (zone locale pour limiter le téléchargement initial)
   mapV: 1,             // migration : revient une fois de la zone 6 km qui lançait plus de 200 requêtes
   realTheme: 'day',    // (ancien réglage, remplacé par saison / moment / lumière)

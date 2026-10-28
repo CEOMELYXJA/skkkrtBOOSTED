@@ -371,10 +371,11 @@ export function buildReal(group, th, quality, D, H) {
     if (!EL || D._bridged === EL) return; D._bridged = EL;
     const bw = D.roads.filter(r => r.br), byNode = new Map(), seen = new Set();
     for (const r of bw) for (const id of [r.n0, r.n1]) if (id != null) { let a = byNode.get(id); if (!a) byNode.set(id, a = []); a.push(r); }
-    const endE = (r, first) => { const n = r.p.length / 2, i = first ? 0 : n - 1; return E(r.p[i * 2], r.p[i * 2 + 1]); };
+    const deckLift = D.preset === 'sky' ? 54 : 0;
+    const endE = (r, first) => { const n = r.p.length / 2, i = first ? 0 : n - 1; return E(r.p[i * 2], r.p[i * 2 + 1]) + deckLift; };
     const setDeck = (r, s0, rev, L, hA, hB) => {
       const n = r.p.length / 2, tot = r.cl[n - 1], dk = new Float32Array(n);
-      for (let i = 0; i < n; i++) { const sd = s0 + (rev ? tot - r.cl[i] : r.cl[i]), line = hA + (hB - hA) * (L > 0 ? sd / L : 0); dk[i] = Math.max(line, E(r.p[i * 2], r.p[i * 2 + 1])); }
+      for (let i = 0; i < n; i++) { const sd = s0 + (rev ? tot - r.cl[i] : r.cl[i]), line = hA + (hB - hA) * (L > 0 ? sd / L : 0); dk[i] = Math.max(line, E(r.p[i * 2], r.p[i * 2 + 1]) + deckLift); }
       r.deck = L >= 12 ? dk : null;
     };
     for (const r0 of bw) {
@@ -402,6 +403,7 @@ export function buildReal(group, th, quality, D, H) {
      trottoirs de chaque côté…), on comble l'espace entre elles par un seul tablier continu et on ne garde de parapet qu'à l'extérieur. */
   function bridgeFills() {
     if (!EL || D._fills === EL) return; D._fills = EL;
+    if (D.preset === 'sky') return; // le parcours aérien reçoit ses propres cordes et planches
     const bs = []; D.roads.forEach((r, ix) => { r.ix = ix; if (r.br && r.deck) bs.push(r); });
     D.bfill = []; D.bnb = new Map();
     if (bs.length < 2) return;
@@ -468,7 +470,8 @@ const marks = !!settings.roadMarks, mkRoad = kind => lay(new THREE.MeshStandardM
   const walkMat = lay(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide }), -3, -6);
   const crossMat = lay(new THREE.MeshStandardMaterial({ color: 0xf2f4f8, roughness: 0.9, side: THREE.DoubleSide }), -5, -10);
   const footMat = lay(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide }), -5, -10);
-  const laneMat = lay(new THREE.MeshStandardMaterial({ map: H.laneTex(th), roughness: 0.85, side: THREE.DoubleSide }), -6, -12);
+  const laneTexMap = D.synthetic && ['snow', 'skate', 'mountain', 'sky'].includes(D.preset) ? H.roadTex(th, 'plain', TR) : H.laneTex(th);
+  const laneMat = lay(new THREE.MeshStandardMaterial({ map: laneTexMap, roughness: 0.85, side: THREE.DoubleSide }), -6, -12);
   const parkMat = lay(new THREE.MeshStandardMaterial({ color: th.lawn, roughness: 1, side: THREE.DoubleSide }), -1);
   if (th.patchy) patchySnow(parkMat, th.patchy);
   const pkMat = lay(new THREE.MeshStandardMaterial({ color: col(th.road).multiplyScalar(1.1), roughness: 0.95, side: THREE.DoubleSide }), -2);   // v9.28 : stationnements (asphalte)
@@ -725,7 +728,7 @@ const marks = !!settings.roadMarks, mkRoad = kind => lay(new THREE.MeshStandardM
       };
       for (let k = 0; k < c.rs.length; k += 2) {
         const r = D.roads[c.rs[k]], i = c.rs[k + 1], hw = r.w / 2;
-        if (EL && r.br && r.deck) bridgeParts(r, i, hw);
+        if (EL && r.br && r.deck && D.preset !== 'sky') bridgeParts(r, i, hw);
         if (r.kind === 'car') {
           const L = r.cl[r.cl.length - 1], mid = (r.cl[i] + r.cl[i + 1]) / 2;
           // les lignes s'arrêtent à 7 m des bouts de la route (carrefours) pour ne pas se croiser
@@ -919,7 +922,10 @@ const marks = !!settings.roadMarks, mkRoad = kind => lay(new THREE.MeshStandardM
     }
     return false;
   }
-  const hitKind = (x, z) => hitBuilding(D, x, z, 0.5) ? 'building' : treeAt(x, z) ? 'tree' : null;
+  const hitKind = (x, z) => {
+    if (D.preset === 'skate') { const ax = Math.abs(x), az = Math.abs(z); if ((ax > 140.8 && ax < 143.2 && az < 143) || (az > 140.8 && az < 143.2 && ax < 143)) return 'building'; }
+    return hitBuilding(D, x, z, 0.5) ? 'building' : treeAt(x, z) ? 'tree' : null;
+  };
 
   /* ---- point de départ : la route la plus proche de ta position (jamais dans un bâtiment) */
   const me = D.me || [0, 0];

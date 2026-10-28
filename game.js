@@ -246,6 +246,7 @@ export function createGame(scene, cb) {
     rows.push(['🏅 Meilleur (' + S.lv.name + ')', b.score + ' pts' + (b.time ? ' · ' + fmt(b.time) : '')]);
     el.rRows.innerHTML = rows.map(r => '<div><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('');
     el.res.hidden = false;
+    if (cb.onEnd) cb.onEnd();
     cb.sfx(win ? 'win' : 'lose');
     say(win ? 'TOUS LES DRAPEAUX !' : 'TEMPS ÉCOULÉ', 1600, win ? 'good' : 'bad');
     hudText(true);

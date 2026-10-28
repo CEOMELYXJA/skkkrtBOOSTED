@@ -108,6 +108,7 @@ const keys = Object.create(null), kk = Object.create(null);
 const kUp = () => keys.ArrowUp || keys.KeyW, kDown = () => keys.ArrowDown || keys.KeyS, kLeft = () => keys.ArrowLeft || keys.KeyA, kRight = () => keys.ArrowRight || keys.KeyD;
 const look = { yaw: 0, pitch: 0, idle: 9 };
 const slide = { x: 0, z: 0 };                                       // glissement sur route mouillée (orage)
+let snowSlide = 0, snowSlideCooldown = 0;                         // dérapages brefs et espacés sur la neige
 /* joystick tactile : haut = accélérer (selon l'inclinaison), bas = freiner, gauche/droite = diriger */
 const joy = { x: 0, y: 0, id: null };
 {
@@ -140,7 +141,7 @@ const mouse = { idle: 9, locked: false };
   canvas.addEventListener('click', () => { if (canLock() && !mouse.locked) { try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch {} } });
   document.addEventListener('pointerlockchange', () => {
     const was = mouse.locked; mouse.locked = document.pointerLockElement === canvas;
-    if (was && !mouse.locked && state.started && !paused && panel.hidden) setPause(true);   // Échap pendant la capture : pause (le navigateur avale la touche)
+    if (was && !mouse.locked && state.started && !paused && panel.hidden && $('#results').hidden) setPause(true);   // une fin de partie libère la souris sans recouvrir les boutons de résultat
   });
 }
 addEventListener('keydown', e => {
@@ -164,6 +165,7 @@ rig.rotation.order = 'YXZ';                                        // cap d'abor
 rig.position.set(SPAWN.x, 0, SPAWN.z);
 scene.add(rig);
 const scooter = makeScooter();
+scooter.setRider({ hair: settings.riderHair, glasses: settings.riderGlasses, skin: settings.riderSkin, vest: settings.riderVest });
 rig.add(scooter.root);
 scene.add(rig);
 
@@ -219,7 +221,8 @@ function swapFull(now) {                                           // remplace l
 let cityCache = null;
 function cityFor(seed, preset) {
   const key = String(seed) + ':' + preset;
-  if (!cityCache || cityCache.key !== key) cityCache = { key, D: makeCity(seed, tri, 400, preset) };
+  const half = preset === 'skate' ? 180 : preset === 'f1' ? 360 : preset === 'mountain' ? 520 : 400;
+  if (!cityCache || cityCache.key !== key) cityCache = { key, D: makeCity(seed, tri, half, preset) };
   return cityCache.D;
 }
 async function ensureRelief(D) {                                  // altitudes réelles (une fois par carte)
@@ -251,7 +254,9 @@ function startGps() {
 }
 function placeAtSpawn() {
   const sp = world.spawn;
-  rig.position.set(sp.x, 0, sp.z); state.yaw = state.camYaw = sp.yaw; state.speed = 0;
+  const deck = world.api && world.api.deckY(sp.x, sp.z);
+  const floor = deck != null ? deck : world.api ? world.api.elev(sp.x, sp.z) : 0;
+  rig.position.set(sp.x, floor || 0, sp.z); state.yaw = state.camYaw = sp.yaw; state.speed = 0;
 }
 function rebuildWorld(done) {
   const veil = $('#veil'); veil.hidden = false; setVeil('Chargement du monde…');
@@ -610,7 +615,7 @@ const audio = {
 /* ------------------------------------------------------------ jeu (drapeaux, pièces) & chutes */
 let extras = null;
 function playSfx(k) { audio.sfx(k); if (extras) extras.celebrate(k); }   // son + confettis
-const game = createGame(scene, { sfx: playSfx, again: () => newGame(), free: () => set('gameMode', 'free'), world: () => world });
+const game = createGame(scene, { sfx: playSfx, again: () => newGame(), free: () => set('gameMode', 'free'), world: () => world, onEnd: () => { try { document.exitPointerLock(); } catch {} } });
 
 // balade libre : pièces, anneaux et drapeaux réguliers sur ton chemin + favoris appris de tes trajets
 let _favC = null, _favT = 0;
@@ -820,6 +825,7 @@ onChange(k => {
   if (all || k === 'view') applyView();
   if (all || k === 'traffic') world && world.setTraffic(settings.traffic);
   if (all || ['trafficLevel', 'trafficLights', 'special', 'difficulty'].includes(k)) { applyTraffic(); if (k === 'special') resetStars(); if (k === 'special' && specialMode() === 'chase') log('Mode criminel : la police, les ambulances et les pompiers te poursuivent. Fuis !'); }
+  if (all || ['riderHair', 'riderGlasses', 'riderSkin', 'riderVest'].includes(k)) scooter.setRider({ hair: settings.riderHair, glasses: settings.riderGlasses, skin: settings.riderSkin, vest: settings.riderVest });
   if (all || k === 'cupHolder') scooter.setCup(settings.cupHolder);
   if (k === 'weather') { extras.resetWeather(); log(settings.weather === 'storm' ? 'Orage : route glissante, visière (🥽) pour la pluie.' : settings.weather === 'tornado' ? 'Tornade : le vent attire la trottinette même guidon droit.' : 'Beau temps.'); }
   if (all || k === 'viewOpacity') applyOpacity();
@@ -844,7 +850,7 @@ function copyText(t) {
 buildPanel(panel, { sessionReport: () => { const t = SL.report(); copyText(t).then(ok => log(ok ? '📋 Rapport copié (' + SL.count() + ' partie(s), ' + Math.round(t.length / 1024) + ' Ko) : colle-le dans la conversation.' : 'Copie impossible ici : ouvre le jeu seul (sans l’app) et réessaie.')); },
   sessionClear: () => { SL.clear(); log('Journal des parties effacé.'); },
   rideStats: () => { const st = rides.stats(), t = free.totals(); log('Trajets : ' + st.rides + ' · ' + st.km + ' km · ' + st.favs + ' endroits favoris · points à vie : ' + t.pts + ' (' + t.coins + ' pièces, ' + t.rings + ' anneaux, ' + t.flags + ' drapeaux)'); }, clearRides: () => { rides.clear(); _favC = null; log('Historique des trajets effacé.'); }, clearFree: () => { free.clearTotals(); log('Points de la balade libre remis à zéro.'); }, close: () => closePanel(), calibrate, home: goHome, recenter, newCity, clearBest: () => { game.clearBest(); $('#gBest').textContent = game.bestLine(); log('Records effacés.'); } });
-worldPicker($('#gWorlds')); segment($('#gPreset'), 'preset', [['city', '🏙 Ville + pont'], ['skate', '🛹 Skatepark'], ['mountain', '⛰ Sentier montagne'], ['f1', '🏎 Circuit F1'], ['snow', '❄️ Motoneige']]); { const el = $('#gRealTheme'); for (const [k, o] of [['season', [['summer', '☀️ Été'], ['winter', '❄️ Hiver'], ['spring', '🌱 Printemps'], ['autumn', '🍂 Automne']]], ['tod', [['day', '🌞 Jour'], ['dusk', '🌇 Soir'], ['night', '🌙 Nuit']]], ['glow', [['normal', 'Lumière discrète'], ['neon', '🌈 Néon']]]]) { const d = document.createElement('div'); el.append(d); segment(d, k, o); } } segment($('#gView'), 'view', [['fp', '1re personne'], ['tp', '2e personne']]);
+worldPicker($('#gWorlds')); segment($('#gPreset'), 'preset', [['city', '🏙 Ville + pont'], ['skate', '🛹 Skatepark'], ['mountain', '⛰ Sentier montagne'], ['f1', '🏎 Circuit F1'], ['snow', '❄️ Motoneige'], ['sky', '☁️ Relais dans le ciel']]); { const el = $('#gRealTheme'); for (const [k, o] of [['season', [['summer', '☀️ Été'], ['winter', '❄️ Hiver'], ['spring', '🌱 Printemps'], ['autumn', '🍂 Automne']]], ['tod', [['day', '🌞 Jour'], ['dusk', '🌇 Soir'], ['night', '🌙 Nuit']]], ['glow', [['normal', 'Lumière discrète'], ['neon', '🌈 Néon']]]]) { const d = document.createElement('div'); el.append(d); segment(d, k, o); } } segment($('#gView'), 'view', [['fp', '1re personne'], ['tp', '2e personne']]);
 segment($('#gMode'), 'gameMode', [['ctf', '🚩 Capture de drapeaux'], ['free', 'Balade libre']]);
 segment($('#gRadius'), 'mapRadius', [['800', '800 m (rapide)'], ['1500', '1,5 km (élargi)']]);
 segment($('#gDiff'), 'difficulty', [['easy', 'Facile'], ['med', 'Moyen'], ['hard', 'Difficile']]);
@@ -1102,8 +1108,15 @@ function frame(now) {
   const fx = -Math.sin(state.yaw), fz = -Math.cos(state.yaw);
   const px = rig.position.x, pz = rig.position.z;
   let vx = fx * state.speed, vz = fz * state.speed;
-  if (X.slip && !ride.locked) { const g = Math.min(1, dt * 2.3); slide.x += (vx - slide.x) * g; slide.z += (vz - slide.z) * g; vx = slide.x; vz = slide.z; }   // orage : la route est glissante, la trottinette dérape
-  else { slide.x = vx; slide.z = vz; }
+  snowSlideCooldown = Math.max(0, snowSlideCooldown - dt);
+  snowSlide = Math.max(0, snowSlide - dt);
+  if (world.preset === 'snow' && !ride.locked && state.speed > 4.2 && Math.abs(state.steer) > 0.52 && snowSlideCooldown <= 0 && Math.random() < dt * 0.48) { snowSlide = 0.85; snowSlideCooldown = 3.5 + Math.random() * 4.5; }
+  const drifting = X.slip || snowSlide > 0;
+  if (drifting && !ride.locked) {
+    const side = snowSlide > 0 ? Math.sign(state.steer || 1) : 0, lateral = side * state.speed * 0.2;
+    const tx = fx * state.speed + Math.cos(state.yaw) * lateral, tz = fz * state.speed - Math.sin(state.yaw) * lateral;
+    const g = Math.min(1, dt * (snowSlide > 0 ? 1.45 : 2.3)); slide.x += (tx - slide.x) * g; slide.z += (tz - slide.z) * g; vx = slide.x; vz = slide.z;
+  } else { slide.x = vx; slide.z = vz; }
   if (!ride.locked) { vx += X.wind.x; vz += X.wind.z; }                // tornade : « magnétisme » du vent vers le monstre
   const nx = px + vx * dt, nz = pz + vz * dt;
   let moved = false, blocked = 0;
@@ -1204,6 +1217,7 @@ function frame(now) {
     { const sj = !!settings.joystick && !tel; $('#joy').hidden = !sj; $('#hud').classList.toggle('joyOn', sj); if (!sj) { joy.x = joy.y = 0; } }
     { const ms = $('#mslope'), rel = !!(world.api && world.api.hasRelief); ms.hidden = !rel;
       if (rel) { const pc = state.slope * 100; ms.textContent = (pc >= 0.5 ? '▲ ' : pc <= -0.5 ? '▼ ' : '▬ ') + Math.abs(pc).toFixed(0) + ' %'; } }
+    { const drift = $('#mslide'); drift.hidden = !(world.preset === 'snow' && snowSlide > 0); }
     $('#mdist').textContent = (state.dist / 1000).toFixed(2) + ' km';
     $('#sn').style.left = (50 + state.steer * 46) + '%';
     if (gyro.on && !gyro.calibrated) { $('#mgyro').textContent = 'Gyro : à calibrer'; $('#mgyro').className = 'chip warn'; }

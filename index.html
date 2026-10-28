@@ -57,6 +57,38 @@ body[data-sport="1"] #a #sp{font-family:Orbitron,system-ui,sans-serif;font-weigh
 body[data-sport="1"] #a #arc{stroke:#ffb52e;filter:drop-shadow(0 0 5px #ffb52e99)}
 body[data-sport="1"] #a #bt,body[data-sport="1"] #a #od,body[data-sport="1"] #a #tr{color:#ffc85a;font-family:Orbitron,system-ui,sans-serif;font-variant-numeric:tabular-nums}
 body[data-sport="1"] #a .bar{background:#394655}
+
+body[data-sport="1"] #a{position:relative;isolation:isolate;overflow:hidden;background:radial-gradient(ellipse at 50% 0%,#163846 0%,#111f2b 38%,#070d13 78%);color:#e4f7fb;border:1px solid #4c6975;border-radius:18px;padding:18px;box-shadow:inset 0 0 0 4px #091219,inset 0 0 36px #2bb9d522,0 18px 44px #0009}
+body[data-sport="1"] #a::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(circle at 4% 11%,#9db7bb 0 2px,transparent 2.5px),radial-gradient(circle at 96% 11%,#9db7bb 0 2px,transparent 2.5px),radial-gradient(ellipse at 50% 0%,#27b6d32a,transparent 55%),repeating-linear-gradient(115deg,transparent 0 39px,#a6c3cd0a 40px,#a6c3cd0a 42px,transparent 43px 78px)}
+body[data-sport="1"] #a::after{content:"";position:absolute;inset:7px;z-index:-1;pointer-events:none;border:1px solid #8ab0bc36;border-radius:13px;box-shadow:inset 0 0 24px #39d6ff0b}
+body[data-sport="1"] #a #dash{position:relative;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}
+body[data-sport="1"] #a #dash>.blk{min-width:0;padding:14px;border:1px solid #385363;border-radius:13px;background:linear-gradient(145deg,#1a2a35ee,#08131bf5);box-shadow:inset 0 1px #d7f5ff18,inset 0 -16px 26px #02070b80,0 7px 18px #0008;position:relative}
+body[data-sport="1"] #a #dash>[data-id="jauge"]{grid-column:span 4;grid-row:span 2;background:radial-gradient(ellipse at 50% 45%,#173849,#08131b 72%);display:flex;flex-direction:column;justify-content:center;align-items:center}
+body[data-sport="1"] #a #dash>[data-id="bat"]{grid-column:span 3;display:flex;flex-direction:column;justify-content:center}
+body[data-sport="1"] #a #dash>[data-id="stats"]{grid-column:span 5;grid-row:span 2}
+body[data-sport="1"] #a #dash>[data-id="cmd"]{grid-column:span 3}
+body[data-sport="1"] #a #dash>[data-id="jauge"] #gauge{width:min(100%,390px);filter:drop-shadow(0 0 8px #39d6ff55)}
+body[data-sport="1"] #a #dash>[data-id="jauge"] #sp{font-family:Orbitron,system-ui,sans-serif;font-size:clamp(3.6rem,8vw,6rem);line-height:.95;font-variant-numeric:tabular-nums;color:#eaffff;text-shadow:0 0 12px #2ddcffaa,0 0 35px #13b9d566}
+body[data-sport="1"] #a #dash>[data-id="jauge"] #un{color:#65d9e8;text-transform:uppercase;letter-spacing:.34em;font-size:.78rem;margin:4px 0 16px}
+body[data-sport="1"] #a #dash>[data-id="jauge"] .g{display:grid;width:100%;grid-template-columns:repeat(2,minmax(0,1fr))}
+body[data-sport="1"] #a #dash>.blk h3{color:#83c5d0;font-family:Orbitron,system-ui,sans-serif;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;border-bottom:1px solid #426174;padding-bottom:8px}
+body[data-sport="1"] #a #dash>.blk small{color:#94aeb8}
+body[data-sport="1"] #a .c{background:linear-gradient(145deg,#1c3039,#0b151d);border:1px solid #45606b;border-radius:9px;box-shadow:inset 0 1px #e5fbff16,0 3px 8px #0007}
+body[data-sport="1"] #a #bt,body[data-sport="1"] #a #od,body[data-sport="1"] #a #tr,body[data-sport="1"] #a #tm,body[data-sport="1"] #a #av,body[data-sport="1"] #a #ac,body[data-sport="1"] #a #vs{color:#ffd074;font-family:Orbitron,system-ui,sans-serif;font-variant-numeric:tabular-nums;text-shadow:0 0 10px #ffaa3340}
+body[data-sport="1"] #a .bar{height:12px;background:#263b44;border:1px solid #52707a;box-shadow:inset 0 2px 4px #0009}
+body[data-sport="1"] #a .bar i{background:linear-gradient(90deg,#17abc4,#61ecdb);box-shadow:0 0 12px #34dfffaa}
+body[data-sport="1"] #a #arc{stroke:#4ce6ed;filter:drop-shadow(0 0 6px #31e4ff)}
+body[data-sport="1"] #a button{border-color:#4b6873;background:linear-gradient(180deg,#213540,#101d25);color:#e4f9fb;box-shadow:inset 0 1px #ffffff1a,0 3px 8px #0007}
+body[data-sport="1"] #a button:hover,body[data-sport="1"] #a button.on{border-color:#59d9ea;color:#fff;box-shadow:0 0 14px #24c8e444,inset 0 0 10px #2ab6cf22}
+body[data-sport="1"] #a #cn{font-weight:700;border-color:#d79b4e;background:linear-gradient(180deg,#664a2b,#372a1e);color:#ffe6bc}
+body[data-sport="1"] #a #sunset{color:#f3dfbd}
+@media(max-width:760px){
+ body[data-sport="1"] #a{padding:12px}
+ body[data-sport="1"] #a #dash{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ body[data-sport="1"] #a #dash>[data-id="jauge"]{grid-column:span 2;grid-row:auto}
+ body[data-sport="1"] #a #dash>[data-id="bat"],body[data-sport="1"] #a #dash>[data-id="stats"],body[data-sport="1"] #a #dash>[data-id="cmd"]{grid-column:span 2;grid-row:auto}
+ body[data-sport="1"] #a #dash>[data-id="jauge"] #sp{font-size:4rem}
+}
 @media (display-mode:standalone) and (min-width:700px){body{border-radius:18px}header{border-radius:18px 18px 0 0}}
 .err{color:#d33}
 .hl{display:flex;align-items:baseline;gap:8px}
@@ -119,7 +151,7 @@ input[type=color]{width:100%;height:36px;border:0;background:none;padding:0}
    <div class="c" style="margin-top:10px"><small>Fond : couleur (arc-en-ciel)</small><input id="hue" type="range" min="0" max="360" value="0">
     <small style="margin-top:10px">Fond : sombre ↔ clair</small><input id="lt" class="rg" type="range" min="4" max="96" value="50"></div>
    <div class="g"><label class="c"><small>Couleur du texte</small><input id="ct" type="color" value="#ffffff"></label><label class="c"><small>Couleur d'accent</small><input id="ca" type="color" value="#ffffff"></label></div>
-   <button id="spc" style="width:100%;margin:10px 0">⚡ Activer le cockpit sportif</button><p class="n">Affichage sombre inspiré d'un tableau de bord de performance.</p>
+   <button id="spc" style="width:100%;margin:10px 0">⚡ Activer le cockpit sportif</button><p class="n">Cockpit sombre inspiré d’un tableau de bord d’avion, avec cadrans lumineux et alertes ambre.</p>
    <button id="hr">Couleurs d'origine</button> <button id="ro">Disposition d'origine</button></div>
  </div>
 </section>
@@ -132,7 +164,7 @@ input[type=color]{width:100%;height:36px;border:0;background:none;padding:0}
  <div class="blk" data-id="ses"><h3>10 dernières sessions</h3><div id="hs"></div></div>
 </div></section>
 
-<section id="c"><h3>Prochaines 3 heures</h3><div id="wx" class="n">Chargement…</div><button id="wr">Actualiser</button></section>
+<section id="c"><h3>Prochaines 3 heures</h3><div class="c" id="sunset" style="margin:0 0 10px"><small>Coucher du soleil</small><b>Calcul en cours…</b></div><div id="wx" class="n">Chargement…</div><button id="wr">Actualiser</button></section>
 
 <section id="d"><div id="en" data-sort>
  <div class="blk" data-id="fr"><h3>Freins (estimation)</h3>
@@ -148,7 +180,7 @@ input[type=color]{width:100%;height:36px;border:0;background:none;padding:0}
 
 <section id="f">
  <h3>SKKKRT3D · simulateur en ville</h3>
- <p class="n">Ta trottinette devient une vraie manette : la poignée donne la vitesse, le gyro du téléphone (fixé sur le guidon) tourne le monde. 4 mondes, vue 1re ou 2e personne, polices et réglages dans le jeu (⚙). Nouveau : jeu de capture de drapeaux 🚩 avec pièces dorées, chrono et points, chute en percutant un bâtiment, cyclistes à éviter (ou à percuter).</p>
+ <p class="n">Ta trottinette devient une vraie manette : la poignée donne la vitesse, le gyro du téléphone (fixé sur le guidon) tourne le monde. 6 parcours imaginaires, vue 1re ou 2e personne, polices et réglages dans le jeu (⚙). Nouveau : jeu de capture de drapeaux 🚩 avec pièces dorées, chrono et points, chute en percutant un bâtiment, cyclistes à éviter (ou à percuter).</p>
  <p class="n">1. Connecte ta trottinette dans l'onglet <b>Tableau</b> (la connexion est partagée avec le jeu).<br>2. Entre dans la ville, autorise le gyro, puis <b>Calibrer guidon</b> guidon droit.</p>
  <button id="g3" class="on" style="width:100%;margin-top:6px">Entrer dans la ville 3D</button>
  <p class="n" id="g3s"></p>
@@ -172,7 +204,7 @@ function theme(){
   if(cfg.h!=null||cfg.l!=null){const l=cfg.l??(d?11:93);set('--bg',`hsl(${cfg.h||0} ${cfg.h==null?0:d?55:85}% ${l}%)`);set('--fg',l>55?'#111':'#fff')}else{set('--bg');set('--fg')}
   if(cfg.tx)set('--fg',cfg.tx);
   document.body.dataset.sport=cfg.sport?'1':'0';
-  const sport=$('#spc');if(sport){sport.classList.toggle('on',!!cfg.sport);sport.textContent=cfg.sport?'⚡ Cockpit sportif activé':'⚡ Activer le cockpit sportif'}
+  const sport=$('#spc');if(sport){sport.classList.toggle('on',!!cfg.sport);sport.textContent=cfg.sport?'⚡ Cockpit de pilotage activé':'⚡ Activer le cockpit de pilotage'}
   document.body.style.fontStyle=cfg.f==='ita'?'italic':'';set('--ac',cfg.ac);set('--ff',F[cfg.f]&&F[cfg.f][1]);set('--z',cfg.z);set('--sz',cfg.sz);
   $$('#fl button').forEach(b=>b.classList.toggle('on',b.dataset.f===(cfg.f||'sys')));
   document.querySelector('meta[name=theme-color]').content=getComputedStyle(document.body).backgroundColor;
@@ -412,11 +444,13 @@ function wx(){
   $('#wx').textContent='Localisation…';
   navigator.geolocation.getCurrentPosition(async p=>{
     try{
-      const r=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.coords.latitude}&longitude=${p.coords.longitude}&hourly=temperature_2m,precipitation_probability,cloud_cover,wind_gusts_10m&timezone=auto&forecast_days=2`)).json();
+      const r=await(await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.coords.latitude}&longitude=${p.coords.longitude}&hourly=temperature_2m,precipitation_probability,cloud_cover,wind_gusts_10m&daily=sunset&timezone=auto&forecast_days=2`)).json();
+      const sunsets=(r.daily&&r.daily.sunset)||[];
+      $('#sunset').innerHTML='<small>Coucher du soleil</small>'+sunsets.slice(0,2).map((t,n)=>'<b style="margin-left:12px">'+(n===0?'Aujourd’hui':'Demain')+' · '+(t?t.slice(11,16):'—')+'</b>').join('');
       const h=r.hourly,now=new Date().toISOString().slice(0,13);let i=h.time.findIndex(t=>t.slice(0,13)>=now.slice(0,13));if(i<0)i=0;
       $('#wx').innerHTML=[0,1,2].map(j=>i+j).map(n=>`<div class="c" style="margin-bottom:8px"><small>${h.time[n].slice(11,16)}</small><b>${Math.round(h.temperature_2m[n])} °C</b><small>Pluie ${h.precipitation_probability[n]} % · Nuages ${h.cloud_cover[n]} % · Rafales ${Math.round(h.wind_gusts_10m[n])} km/h</small></div>`).join('');
-    }catch(e){$('#wx').textContent='Météo indisponible (connexion ?)'}
-  },e=>$('#wx').textContent='Active la localisation : '+e.message);
+    }catch(e){$('#wx').textContent='Météo indisponible (connexion ?)';$('#sunset').innerHTML='<small>Coucher du soleil</small><b>Indisponible</b>'}
+  },e=>{$('#wx').textContent='Active la localisation : '+e.message;$('#sunset').innerHTML='<small>Coucher du soleil</small><b>Autorise la localisation</b>'});
 }
 $('#wr').onclick=wx;
 

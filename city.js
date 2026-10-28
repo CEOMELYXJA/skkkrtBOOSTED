@@ -22,7 +22,7 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
   const R = rngOf(seed * 2654435761 + 12345);
   for (let i = 0; i < 6; i++) R();
   const rr = (a, b) => a + (b - a) * R();
-  if (!['city', 'skate', 'mountain', 'f1', 'snow'].includes(preset)) preset = 'city';
+  if (!['city', 'skate', 'mountain', 'f1', 'snow', 'sky'].includes(preset)) preset = 'city';
 
   /* ---------------------------------------------------------------- 1. nœuds de carrefour (grille déformée) */
   const span = preset === 'city' ? [88, 106] : preset === 'skate' ? [112, 130] : preset === 'f1' ? [126, 148] : [118, 140];
@@ -56,6 +56,8 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
     }
     const keep = new Set(best); edges = edges.filter(e => keep.has(e.a.id) && keep.has(e.b.id));
   }
+
+  if (preset !== 'city') edges = []; // seuls les rues de la ville gardent la grille urbaine
 
   /* ---------------------------------------------------------------- 2. routes courbes (échantillonnées tous les ~8 m) */
   const placed = [];                                              // arêtes déjà tracées (pour éviter les croisements)
@@ -138,7 +140,8 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
     }
     return false;
   };
-  const nPark = preset === 'skate' ? 5 : 3 + Math.floor(R() * 2), nPond = preset === 'snow' ? 0 : preset === 'mountain' ? 4 : 2 + Math.floor(R() * 2), nWood = preset === 'mountain' ? 8 : preset === 'snow' ? 10 : preset === 'skate' ? 6 : 2 + Math.floor(R() * 2);
+  const specialTrack = ['skate', 'f1', 'sky'].includes(preset);
+  const nPark = specialTrack ? 0 : 3 + Math.floor(R() * 2), nPond = preset === 'snow' ? 0 : preset === 'mountain' ? 4 : 2 + Math.floor(R() * 2), nWood = preset === 'mountain' ? 8 : preset === 'snow' ? 10 : specialTrack ? 0 : 2 + Math.floor(R() * 2);
   for (let i = 0; i < nPark; i++) makeBlob('park', 24, 36);
   for (let i = 0; i < nPond; i++) makeBlob('water', 12, 22);
   for (let i = 0; i < nWood; i++) makeBlob('wood', 22, 34);
@@ -210,15 +213,17 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
     }
   }
   // (b) bâtiments dispersés à l'intérieur des îlots, orientés au hasard
-  const scatter = preset === 'city' ? 1400 : preset === 'f1' ? 230 : preset === 'skate' ? 70 : 35;
+  const scatter = preset === 'city' ? 1400 : 0;
   for (let t = 0; t < scatter; t++) {
     const w = rr(8, 17), d = rr(8, 14), cx = rr(-half + 50, half - 50), cz = rr(-half + 50, half - 50);
     tryBuilding(cx, cz, w, d, R() * Math.PI);
   }
-  const addCourse = (coords, highway, extra = {}) => {
-    const geometry = coords.map(p => ll(p[0], p[1]));
-    if (coords.length > 2 && Math.hypot(coords[0][0] - coords[coords.length - 1][0], coords[0][1] - coords[coords.length - 1][1]) > 0.2) geometry.push(geometry[0]);
-    els.push({ type: 'way', id: wid++, geometry, tags: Object.assign({ highway, name: extra.name || 'Parcours imaginaire' }, extra) });
+  const addCourse = (coords, highway, extra = {}, closed = false) => {
+    const pts = coords.slice();
+    if (closed && pts.length > 2 && Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) > 0.2) pts.push(pts[0]);
+    const ids = pts.map((_, i) => closed && i === pts.length - 1 ? null : nid++);
+    if (closed && ids.length) ids[ids.length - 1] = ids[0];
+    els.push({ type: 'way', id: wid++, nodes: ids, geometry: pts.map(p => ll(p[0], p[1])), tags: Object.assign({ highway, name: extra.name || 'Parcours imaginaire' }, extra) });
   };
   const oval = (cx, cz, rx, rz, count, ripple = 0) => {
     const pts = [];
@@ -238,37 +243,54 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
     const river = a.concat(b.reverse()); river.push(river[0]);
     els.push({ type: 'way', id: wid++, geometry: river.map(p => ll(p[0], p[1])), tags: { natural: 'water', water: 'river', name: 'Rivière' } });
   }
+  if (preset === 'city') {
+    const bridge = [[-108, 0], [-72, 0], [-36, 0], [0, 0], [36, 0], [72, 0], [108, 0]];
+    addCourse(bridge, 'secondary', { name: 'Pont de la rivière', bridge: 'yes', layer: '1' });
+  }
   if (preset === 'skate') {
-    addCourse(oval(0, 0, 74, 48, 96, 0.09), 'cycleway', { name: 'Boucle de skatepark', surface: 'concrete' });
-    addCourse(oval(0, 0, 49, 29, 72, 0.07), 'cycleway', { name: 'Pump track', surface: 'concrete' });
-    addCourse(oval(0, 0, 24, 15, 56, 0.05), 'cycleway', { name: 'Mini-boucle', surface: 'concrete' });
+    const loop = [[-98, -58], [-58, -100], [56, -100], [100, -56], [100, 56], [56, 100], [-56, 100], [-100, 56], [-98, -58]];
+    addCourse(loop, 'residential', { name: 'Tour du skatepark', surface: 'concrete' }, true);
+    addCourse(oval(0, 0, 50, 31, 64, 0.04), 'residential', { name: 'Pump track', surface: 'concrete' }, true);
+    addCourse(oval(0, 0, 20, 12, 48, 0.02), 'cycleway', { name: 'Mini-boucle', surface: 'concrete' }, true);
   }
   if (preset === 'mountain') {
-    const trail = [];
-    for (let i = 0; i <= 64; i++) { const x = -half + 35 + i * (2 * half - 70) / 64; trail.push([x, 150 * Math.sin(x / 94) + 42 * Math.sin(x / 37)]); }
+    const trail = [[0, 0], [28, -44], [62, -82], [94, -116], [130, -128], [166, -95], [202, -46], [236, 6], [265, 55], [236, 96], [198, 130], [154, 156], [112, 142], [72, 106], [35, 65], [0, 22]];
     addCourse(trail, 'cycleway', { name: 'Sentier des crêtes', surface: 'gravel' });
   }
   if (preset === 'f1') {
-    const track = oval(35, 0, 275, 205, 144, 0.045);
-    addCourse(track, 'secondary', { name: 'Circuit de course' });
-    addCourse([[35, -205], [5, -175], [65, -145], [20, -110], [60, -78]], 'tertiary', { name: 'Chicane' });
+    const track = [[0, -205], [92, -196], [170, -154], [240, -112], [256, -58], [235, -4], [180, 26], [112, 23], [76, 51], [118, 91], [192, 125], [220, 178], [178, 226], [104, 220], [45, 185], [10, 132], [-56, 154], [-122, 202], [-202, 184], [-252, 130], [-246, 72], [-214, 25], [-150, 4], [-88, -18], [-120, -62], [-204, -82], [-250, -132], [-205, -180], [-108, -214], [-26, -210]];
+    addCourse(track, 'primary', { name: 'Circuit F1 — tour complet', surface: 'asphalt' }, true);
   }
   if (preset === 'snow') {
-    const track = oval(-15, 0, 285, 225, 150, 0.11);
-    addCourse(track, 'cycleway', { name: 'Piste de motoneige', surface: 'snow' });
+    const track = oval(-15, 0, 285, 225, 160, 0.03);
+    addCourse(track, 'cycleway', { name: 'Piste de motoneige', surface: 'snow' }, true);
     const trail = [];
-    for (let i = 0; i <= 46; i++) { const x = -half + 25 + i * (2 * half - 50) / 46; trail.push([x, 105 * Math.sin(x / 83) + 30 * Math.sin(x / 31)]); }
+    for (let i = 0; i <= 64; i++) { const x = -half + 25 + i * (2 * half - 50) / 64; trail.push([x, 135 * Math.sin(x / 94) + 38 * Math.sin(x / 39)]); }
     addCourse(trail, 'cycleway', { name: 'Sentier enneigé', surface: 'snow' });
+  }
+  if (preset === 'sky') {
+    const route = [[0, 0], [48, -16], [82, -72], [132, -102], [192, -84], [224, -28], [210, 38], [162, 78], [106, 50], [55, 83], [0, 52], [-40, 12], [-28, -44], [24, -84], [76, -72]];
+    addCourse(route, 'residential', { name: 'Relais dans le ciel', surface: 'wood', bridge: 'yes', layer: '1' }, true);
   }
   return { elements: els, half, nBuildings: bs.length };
 }
 
 function syntheticHeight(preset, seed) {
   const phase = ((seed >>> 0) % 4096) / 4096 * Math.PI * 2;
-  if (preset === 'mountain') return (x, z) => 15 * Math.sin(x / 132 + phase) + 8 * Math.sin(z / 86 - phase) + 18 * Math.exp(-(((x + 105) ** 2) / 46000 + ((z - 30) ** 2) / 98000));
-  if (preset === 'snow') return (x, z) => 6 * Math.sin(x / 155 + phase) + 4 * Math.cos(z / 130 - phase) + 3 * Math.sin((x + z) / 210);
-  if (preset === 'f1') return (x, z) => 1.5 * Math.sin(x / 150 + phase) + 1.2 * Math.cos(z / 170 - phase);
-  if (preset === 'skate') return (x, z) => 1.3 * Math.sin(x / 95 + phase) + 1.1 * Math.cos(z / 90 - phase) + 2 * Math.exp(-((x * x + z * z) / 18000));
+  if (preset === 'mountain') return (x, z) => {
+    const peaks = 96 * Math.exp(-(((x + 190) ** 2) / 42000 + ((z + 30) ** 2) / 84000))
+      + 128 * Math.exp(-(((x - 145) ** 2) / 52000 + ((z - 130) ** 2) / 90000))
+      + 82 * Math.exp(-(((x + 35) ** 2) / 26000 + ((z - 260) ** 2) / 50000));
+    const ridge = 10 * Math.sin(x / 112 + phase) + 7 * Math.cos(z / 105 - phase) + 5 * Math.sin((x + z) / 150);
+    return ridge + peaks;
+  };
+  if (preset === 'snow') return (x, z) => {
+    const broad = 3.5 * Math.sin(x / 112 + phase) + 3 * Math.cos(z / 96 - phase);
+    const humps = 9 * Math.pow(Math.max(0, Math.sin((x + phase * 12) / 47) * Math.cos((z - phase * 9) / 53)), 4)
+      + 7 * Math.pow(Math.max(0, Math.cos((x - phase * 8) / 75) * Math.sin((z + phase * 11) / 68)), 6);
+    return broad + humps;
+  };
+  if (preset === 'f1' || preset === 'skate' || preset === 'sky') return (x, z) => 0.45 * Math.sin(x / 180 + phase) + 0.35 * Math.cos(z / 170 - phase);
   return (x, z) => 2.2 * Math.sin(x / 92 + phase) + 1.7 * Math.cos(z / 118 - phase) - 9 * Math.exp(-(x * x / 430 + z * z / 90000));
 }
 
@@ -278,6 +300,7 @@ export function makeCity(seed, tri, half = 400, preset = 'city') {
   const D = parseOSM(j, LAT0, LON0, tri, half);
   D.synthetic = true; D.me = [0, 0]; D.heading = null; D.seed = seed; D.preset = preset;
   D.syntheticHeight = syntheticHeight(preset, seed);
-  D.syntheticHmin = preset === 'mountain' ? -38 : preset === 'city' ? -16 : preset === 'snow' ? -16 : -8;
+  D.me = preset === 'f1' ? [0, -205] : preset === 'skate' ? [-98, -58] : preset === 'snow' ? [270, 0] : [0, 0];
+  D.syntheticHmin = preset === 'mountain' ? -45 : preset === 'city' ? -20 : preset === 'snow' ? -14 : preset === 'skate' ? -3 : -4;
   return D;
 }

@@ -151,6 +151,8 @@ export function makeScooter() {
   const pants  = new THREE.MeshStandardMaterial({ color: 0x23272f, roughness: 0.8 });
   const skin   = new THREE.MeshStandardMaterial({ color: 0xe0b08c, roughness: 0.7 });
   const helmet = PREM ? new THREE.MeshPhysicalMaterial({ color: 0x15171b, roughness: 0.35, metalness: 0.3, clearcoat: 1, clearcoatRoughness: 0.08 }) : new THREE.MeshStandardMaterial({ color: 0x15171b, roughness: 0.35, metalness: 0.3 });
+  const hairMat = new THREE.MeshStandardMaterial({ color: 0x30231d, roughness: 0.88 });
+  const glassesMat = new THREE.MeshStandardMaterial({ color: 0x131b22, roughness: 0.32, metalness: 0.45, side: THREE.DoubleSide });
   const glove  = new THREE.MeshStandardMaterial({ color: 0xd9b9a6, roughness: 0.7 });     // v9.28 : bout des bras (mains) en peau, le reste du haut du corps est noir
   const shoeM  = new THREE.MeshStandardMaterial({ color: 0x111317, roughness: 0.8 });
   const rider = new THREE.Group(); lean.add(rider);
@@ -160,6 +162,24 @@ export function makeScooter() {
   const torso = limb(0.17, jacket); setLimb(torso, hips, sh); torso.scale.x = 1.15; body.add(torso);
   const head2 = add(body, new THREE.SphereGeometry(0.105, 40, 30), skin, 0, 1.6, 0.14);
   const hel = add(body, new THREE.SphereGeometry(0.125, 40, 30, 0, Math.PI * 2, 0, Math.PI * 0.62), helmet, 0, 1.62, 0.14);
+  const hairStyles = {};
+  const makeHair = (name, length) => {
+    const g = new THREE.Group(); body.add(g);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.108, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.48), hairMat);
+    cap.position.set(0, 1.625, 0.14); cap.scale.y = 1.08; g.add(cap);
+    if (length > 0) for (const sx of [-1, 1]) {
+      const lock = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.028, length, 10), hairMat);
+      lock.position.set(sx * 0.088, 1.61 - length * 0.5, 0.15); lock.rotation.z = sx * -0.08; g.add(lock);
+    }
+    hairStyles[name] = g;
+  };
+  makeHair('short', 0.05); makeHair('medium', 0.18); makeHair('long', 0.38);
+  const glassesGroup = new THREE.Group(); glassesGroup.position.set(0, 1.61, 0.025); glassesGroup.rotation.y = Math.PI; body.add(glassesGroup);
+  for (const sx of [-1, 1]) {
+    const lens = new THREE.Mesh(new THREE.TorusGeometry(0.043, 0.006, 7, 20), glassesMat);
+    lens.position.x = sx * 0.047; glassesGroup.add(lens);
+  }
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.008, 0.01), glassesMat); bridge.position.y = 0.004; glassesGroup.add(bridge);
   // jambes
   const legs = [];
   for (const sx of [-1, 1]) {
@@ -198,12 +218,21 @@ export function makeScooter() {
 
   function setView(fp) { body.visible = !fp; }
   setView(true);
+  function setRider(opts = {}) {
+    const hair = ['helmet', 'bald', 'short', 'medium', 'long'].includes(opts.hair) ? opts.hair : 'helmet';
+    hel.visible = hair === 'helmet';
+    Object.entries(hairStyles).forEach(([name, g]) => { g.visible = hair === name; });
+    glassesGroup.visible = !!opts.glasses;
+    const skinColor = opts.skin === 'dark' ? 0x6f422c : 0xe0b08c;
+    skin.color.setHex(skinColor); glove.color.setHex(skinColor);
+    try { jacket.color.set(opts.vest || '#202a36'); } catch { jacket.color.set('#202a36'); }
+  }
 
   function setAccent(hex) { /* v9.28 : le haut du corps reste noir, la couleur d'accent ne le teinte plus */ }
 
   return {
     root, lean, steer, wF, wR, head, spot, tailLight, lamp, tailM, mats, rider,
-    setView, setAccent, setCup,
+    setView, setAccent, setCup, setRider,
     // chute : p = 0 (debout) → 1 (au sol), side = ±1 (côté de la chute)
     setFall(p, side = 1) {
       root.rotation.z = side * p * 1.38;
@@ -225,7 +254,7 @@ export function makeScooter() {
     },
     dispose() {
       root.traverse(o => { if (o.geometry) o.geometry.dispose(); });
-      mats.concat([jacket, pants, skin, helmet, glove, shoeM]).forEach(m => m.dispose());
+      mats.concat([jacket, pants, skin, helmet, glove, shoeM, hairMat, glassesMat]).forEach(m => m.dispose());
     }
   };
 }
