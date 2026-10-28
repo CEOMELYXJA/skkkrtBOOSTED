@@ -374,9 +374,28 @@ export function buildReal(group, th, quality, D, H) {
     for (const r of bw) for (const id of [r.n0, r.n1]) if (id != null) { let a = byNode.get(id); if (!a) byNode.set(id, a = []); a.push(r); }
     const deckLift = D.preset === 'sky' ? 54 : 0;
     const endE = (r, first) => { const n = r.p.length / 2, i = first ? 0 : n - 1; return E(r.p[i * 2], r.p[i * 2 + 1]) + deckLift; };
+    const bridgeWaterLevel = (x, z) => {
+      if (!(D.synthetic && D.preset === 'city')) return null;
+      const rec = waterRec(D, x, z); if (!rec) return null;
+      if (rec.bridgeWl != null && rec.bridgeWlE === EL) return rec.bridgeWl;
+      const NX = 18, values = [];
+      for (let a = 0; a < NX; a++) for (let b = 0; b < NX; b++) {
+        const qx = rec.minx + (a + 0.5) / NX * (rec.maxx - rec.minx), qz = rec.minz + (b + 0.5) / NX * (rec.maxz - rec.minz);
+        if (waterRec(D, qx, qz) === rec) values.push(E(qx, qz));
+      }
+      values.sort((a, b) => a - b);
+      rec.bridgeWl = values.length ? values[Math.floor(values.length * 0.2)] : E(x, z);
+      rec.bridgeWlE = EL;
+      return rec.bridgeWl;
+    };
     const setDeck = (r, s0, rev, L, hA, hB) => {
       const n = r.p.length / 2, tot = r.cl[n - 1], dk = new Float32Array(n);
-      for (let i = 0; i < n; i++) { const sd = s0 + (rev ? tot - r.cl[i] : r.cl[i]), line = hA + (hB - hA) * (L > 0 ? sd / L : 0); dk[i] = Math.max(line, E(r.p[i * 2], r.p[i * 2 + 1]) + deckLift); }
+      for (let i = 0; i < n; i++) {
+        const x = r.p[i * 2], z = r.p[i * 2 + 1], sd = s0 + (rev ? tot - r.cl[i] : r.cl[i]);
+        const line = hA + (hB - hA) * (L > 0 ? sd / L : 0), water = bridgeWaterLevel(x, z);
+        const waterClearance = water == null ? -Infinity : water + 3.2;
+        dk[i] = Math.max(line, E(x, z) + deckLift, waterClearance);
+      }
       r.deck = L >= 12 ? dk : null;
     };
     for (const r0 of bw) {

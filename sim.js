@@ -154,6 +154,7 @@ addEventListener('keydown', e => {
   }
   if (e.repeat === false || e.repeat === undefined) {
     if (e.code === 'KeyJ' && state.started && !paused && !panelOpen && jumpAllowed()) air.requested = true;
+    if (e.code === 'Space' && state.started && !paused && !panelOpen && spaceJumpAllowed()) air.requested = true;
     if (e.code === 'Escape' || e.code === 'KeyP') { if (!panel.hidden) closePanel(); else if (state.started) setPause(!paused); }
     if (!panelOpen && e.code === 'KeyM' && state.started) set('showMap', !settings.showMap);
     if (!panelOpen && e.code === 'KeyV' && state.started) extras.toggleVisor();
@@ -179,6 +180,7 @@ scene.add(rig);
 
 let world = null;
 const jumpAllowed = () => !!(world && (world.preset === 'skate' || world.preset === 'snow'));
+const spaceJumpAllowed = () => !!(world && world.preset === 'snow');
 /* carte réelle : données OpenStreetMap autour de ta position (gardées tant que tu ne recharges pas) */
 let realData = null, stopGps = null, gps = null, buildId = 0;
 const setVeil = t => { const v = $('#veil span'); if (v) v.textContent = t; };
@@ -230,7 +232,7 @@ function swapFull(now) {                                           // remplace l
 let cityCache = null;
 function cityFor(seed, preset) {
   const key = String(seed) + ':' + preset;
-  const half = preset === 'skate' ? 180 : preset === 'f1' ? 360 : preset === 'mountain' ? 380 : 400;
+  const half = preset === 'skate' ? 180 : preset === 'f1' ? 360 : preset === 'mountain' ? 380 : preset === 'sky' ? 130 : 400;
   if (!cityCache || cityCache.key !== key) cityCache = { key, D: makeCity(seed, tri, half, preset) };
   return cityCache.D;
 }
@@ -1101,13 +1103,13 @@ function frame(now) {
     const VMAX = 12, v = state.speed, accel = 3.6 * (1 - 0.55 * v / VMAX) + 0.6;
     if (kUp()) target = Math.min(VMAX, v + accel * dt);
     else if (jy > 0.12) { const want = VMAX * jy; target = v < want ? Math.min(want, v + accel * dt) : Math.max(want, v - 3 * dt); }
-    else if (kDown() || keys.Space || jy < -0.25) target = Math.max(0, v - (X.slip ? 5 : 9) * dt);
+    else if (kDown() || (keys.Space && !spaceJumpAllowed()) || jy < -0.25) target = Math.max(0, v - (X.slip ? 5 : 9) * dt);
     else target = Math.max(0, v - (0.8 + 0.12 * v) * dt);           // roue libre
   } else target = Math.max(0, state.speed - 1.6 * dt);
   if (ride.locked && !tel) target = gpsSpeed();                      // roule pour vrai sans le scooter connecté : la vitesse vient du GPS
   const prev = state.speed;
   state.speed += (target - state.speed) * (kbDirect ? 1 : Math.min(1, dt * 6));
-  state.brake = (prev - state.speed) / Math.max(dt, 0.001) > 2.2 || (kbActive && (kDown() || keys.Space || jy < -0.25));
+  state.brake = (prev - state.speed) / Math.max(dt, 0.001) > 2.2 || (kbActive && (kDown() || (keys.Space && !spaceJumpAllowed()) || jy < -0.25));
   iceFallCooldown = Math.max(0, iceFallCooldown - dt);
   const icy = world.preset === 'snow' || settings.season === 'winter';
   if (settings.falls && icy && state.started && !fall.on && !air.active && state.speed > 4.5 && iceFallCooldown <= 0) {

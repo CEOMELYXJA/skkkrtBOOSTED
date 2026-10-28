@@ -315,40 +315,65 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
   const groundY = (x, z) => api ? api.elev(x, z) : 0;
   const deckY = (x, z) => { const y = api && api.deckY(x, z); return y == null ? groundY(x, z) : y; };
   const makeRampMesh = (x, z, width, length, height, angle, material, baseOffset = 0.05) => {
-    const c = Math.cos(angle), s = Math.sin(angle);
+    const c = Math.cos(angle), s = Math.sin(angle), thickness = 0.62;
     const at = (lx, lz) => {
       const wx = x + c * lx + s * lz, wz = z - s * lx + c * lz;
       return groundY(wx, wz) + baseOffset;
     };
-    const y0 = at(-width / 2, -length / 2), y1 = at(width / 2, -length / 2);
-    const y2 = at(-width / 2, length / 2) + height, y3 = at(width / 2, length / 2) + height;
-    const y4 = at(-width / 2, length / 2), y5 = at(width / 2, length / 2);
-    const v = [-width/2,y0,-length/2, width/2,y1,-length/2, -width/2,y2,length/2, width/2,y3,length/2, -width/2,y4,length/2, width/2,y5,length/2];
-    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); geo.setIndex([0,1,3,0,3,2,0,2,4,1,5,3,2,3,5,2,5,4,0,4,5,0,5,1]); geo.computeVertexNormals();
+    const rearL = at(-width / 2, -length / 2), rearR = at(width / 2, -length / 2);
+    const frontL = at(-width / 2, length / 2), frontR = at(width / 2, length / 2);
+    // Une dalle pleine : dessus incliné, dessous épais et quatre faces fermées.
+    const v = [
+      -width/2,rearL,-length/2, width/2,rearR,-length/2,
+      -width/2,frontL+height,length/2, width/2,frontR+height,length/2,
+      -width/2,frontL-thickness,length/2, width/2,frontR-thickness,length/2,
+      -width/2,rearL-thickness,-length/2, width/2,rearR-thickness,-length/2
+    ];
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+    geo.setIndex([
+      0,2,1, 1,2,3,             // surface de roulement
+      0,6,2, 6,4,2,             // flanc gauche
+      1,3,7, 3,5,7,             // flanc droit
+      2,4,3, 3,4,5,             // nez de la rampe
+      0,1,6, 1,7,6,             // arrière
+      6,7,4, 7,5,4              // dessous
+    ]);
+    geo.computeVertexNormals();
     const m = new THREE.Mesh(geo, material); m.position.set(x, 0, z); m.rotation.y = angle; m.castShadow = true; m.receiveShadow = true; group.add(m);
     rampDefs.push({ x, z, width, length, height, angle, baseOffset });
     return { endX: x + s * length / 2, endZ: z + c * length / 2, endY: at(0, length / 2) + height };
   };
   const makeCurvedRampMesh = (x, z, width, length, height, angle, material, baseOffset = 0.05) => {
-    const c = Math.cos(angle), s = Math.sin(angle), segments = 12, vertices = [], indices = [];
+    const c = Math.cos(angle), s = Math.sin(angle), segments = 16, vertices = [], indices = [];
     for (let i = 0; i <= segments; i++) {
       const t = i / segments, lz = (t - 0.5) * length, rise = height * (0.5 - 0.5 * Math.cos(Math.PI * t));
-      for (const lx of [-width / 2, width / 2]) {
-        const wx = x + c * lx + s * lz, wz = z - s * lx + c * lz;
-        vertices.push(lx, groundY(wx, wz) + baseOffset + rise, lz);
-      }
+      const leftX = -width / 2, rightX = width / 2;
+      const leftW = x + c * leftX + s * lz, leftZ = z - s * leftX + c * lz;
+      const rightW = x + c * rightX + s * lz, rightZ = z - s * rightX + c * lz;
+      const leftBase = groundY(leftW, leftZ) + baseOffset, rightBase = groundY(rightW, rightZ) + baseOffset;
+      vertices.push(leftX, leftBase + rise, lz, rightX, rightBase + rise, lz, leftX, leftBase - 0.18, lz, rightX, rightBase - 0.18, lz);
     }
-    for (let i = 0; i < segments; i++) { const a = i * 2; indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    for (let i = 0; i < segments; i++) {
+      const a = i * 4;
+      // dessus, dessous et deux côtés : la rampe courbe forme maintenant un volume fermé.
+      indices.push(a, a + 4, a + 1, a + 1, a + 4, a + 5);
+      indices.push(a + 2, a + 3, a + 6, a + 3, a + 7, a + 6);
+      indices.push(a, a + 2, a + 4, a + 2, a + 6, a + 4);
+      indices.push(a + 1, a + 5, a + 3, a + 3, a + 5, a + 7);
+    }
+    indices.push(0, 1, 3, 0, 3, 2);
+    const end = segments * 4; indices.push(end, end + 1, end + 3, end, end + 3, end + 2);
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3)); geo.setIndex(indices); geo.computeVertexNormals();
     const m = new THREE.Mesh(geo, material); m.position.set(x, 0, z); m.rotation.y = angle; m.castShadow = true; m.receiveShadow = true; group.add(m);
     rampDefs.push({ x, z, width, length, height, angle, baseOffset, curved: true });
     const endX = x + s * length / 2, endZ = z + c * length / 2;
     return { endX, endZ, endY: groundY(endX, endZ) + baseOffset + height };
   };
-  const makeDeckSlope = (x, z, width, length, height, angle, topMat, sideMat) => {
+  const makeDeckSlope = (x, z, width, length, height, angle, topMat, sideMat, pointy = false) => {
     const c = Math.cos(angle), s = Math.sin(angle), segments = 20, topVertices = [], topUv = [], topIndices = [], sideVertices = [], sideIndices = [];
     for (let i = 0; i <= segments; i++) {
-      const t = i / segments, lz = (t - 0.5) * length, rise = height * (0.5 - 0.5 * Math.cos(2 * Math.PI * t));
+      const t = i / segments, lz = (t - 0.5) * length, rise = pointy ? height * (1 - Math.abs(2 * t - 1)) : height * (0.5 - 0.5 * Math.cos(2 * Math.PI * t));
       for (const lx of [-width / 2, width / 2]) {
         const wx = x + c * lx + s * lz, wz = z - s * lx + c * lz, base = deckY(wx, wz) + 0.07;
         topVertices.push(lx, base + rise, lz); topUv.push((lx + width / 2) / width, t * 3);
@@ -368,7 +393,7 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
     };
     buildStrip(topVertices, topIndices, topUv, topMat);
     buildStrip(sideVertices, sideIndices, null, sideMat);
-    rampDefs.push({ x, z, width, length, height, angle, baseOffset: 0.07, deck: true, hump: true });
+    rampDefs.push({ x, z, width, length, height, angle, baseOffset: 0.07, deck: true, hump: true, pointy });
   };
   if (preset === 'mountain') {
     const trail = [[0,0],[28,-44],[62,-82],[94,-116],[130,-128],[166,-95],[202,-46],[236,6],[265,55],[236,96],[198,130],[154,156],[112,142],[72,106],[35,65],[0,22]];
@@ -493,46 +518,64 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
     });
   }
   if (preset === 'f1') {
-    const start = [0, -205], next = [92, -196], dx = next[0] - start[0], dz = next[1] - start[1], len = Math.hypot(dx, dz) || 1;
+    const track = [[0,-205],[92,-196],[170,-154],[240,-112],[256,-58],[235,-4],[180,26],[112,23],[76,51],[118,91],[192,125],[220,178],[178,226],[104,220],[45,185],[10,132],[-56,154],[-122,202],[-202,184],[-252,130],[-246,72],[-214,25],[-150,4],[-88,-18],[-120,-62],[-204,-82],[-250,-132],[-205,-180],[-108,-214],[-26,-210]];
+    const start = track[0], next = track[1], dx = next[0] - start[0], dz = next[1] - start[1], len = Math.hypot(dx, dz) || 1;
     const tx = dx / len, tz = dz / len, nx = -tz, nz = tx, y = groundY(start[0], start[1]) + 0.11;
     const black = mat(0x15191d, 0.8), white = mat(0xf3f2ed, 0.8);
-    for (let i = 0; i < 8; i++) for (let j = 0; j < 2; j++) {
-      const x = start[0] + nx * (i - 3.5) + tx * (j - 0.5), z = start[1] + nz * (i - 3.5) + tz * (j - 0.5);
-      addBox(x, y, z, 0.98, 0.06, 0.98, (i + j) % 2 ? white : black);
+    for (let i = 0; i < 14; i++) for (let j = 0; j < 2; j++) {
+      const x = start[0] + nx * (i - 6.5) * 0.9 + tx * (j - 0.5) * 0.9;
+      const z = start[1] + nz * (i - 6.5) * 0.9 + tz * (j - 0.5) * 0.9;
+      addBox(x, y, z, 0.88, 0.06, 0.88, (i + j) % 2 ? white : black);
     }
+
     const stand = mat(0x313b46, 0.84), seats = mat(0x65717b, 0.62, 0.12);
-    const crowdGeo = new THREE.SphereGeometry(0.34, 6, 5), crowdColors = [0xf0d5aa,0x3d7594,0xb94643,0xe0b843,0xd8dfe4,0x625a86,0x439276,0xd56f38];
-    const crowdMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
-    const crowd = new THREE.InstancedMesh(crowdGeo, crowdMat, 7200), dummy = new THREE.Object3D(); let n = 0;
-    const addPerson = (x, y, z, scale) => {
-      if (n >= crowd.instanceMatrix.count) return;
-      dummy.position.set(x, y, z); dummy.scale.setScalar(scale); dummy.updateMatrix();
-      crowd.setMatrixAt(n, dummy.matrix); crowd.setColorAt(n, new THREE.Color(crowdColors[Math.floor(Math.random() * crowdColors.length)])); n++;
+    const crowdColors = [0xf0d5aa,0x3d7594,0xb94643,0xe0b843,0xd8dfe4,0x625a86,0x439276,0xd56f38];
+    const skinColors = [0xb97755,0xd49b76,0xf0d5aa,0x8a5d49];
+    const maxPeople = 10000, dummy = new THREE.Object3D();
+    const torso = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.15, 0.2, 0.78, 6), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }), maxPeople);
+    const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.15, 6, 5), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }), maxPeople);
+    let people = 0;
+    const addPerson = (x, y0, z, scale) => {
+      if (people >= maxPeople) return;
+      dummy.position.set(x, y0 + 0.4 * scale, z); dummy.scale.setScalar(scale); dummy.updateMatrix(); torso.setMatrixAt(people, dummy.matrix);
+      torso.setColorAt(people, new THREE.Color(crowdColors[Math.floor(Math.random() * crowdColors.length)]));
+      dummy.position.set(x, y0 + 0.98 * scale, z); dummy.scale.setScalar(scale); dummy.updateMatrix(); heads.setMatrixAt(people, dummy.matrix);
+      heads.setColorAt(people, new THREE.Color(skinColors[Math.floor(Math.random() * skinColors.length)]));
+      people++;
     };
-    // Quatre grandes tribunes qui encerclent la piste, avec sept rangées de sièges et de foule.
-    for (const side of [-1, 1]) for (let row = 0; row < 7; row++) {
-      const y = 1.5 + row * 1.0, outward = side * (274 + row * 4.4);
-      addBox(0, y, outward, 760, 0.9, 14, row % 2 ? seats : stand);
-      addBox(outward, y, 0, 14, 0.9, 760, row % 2 ? seats : stand);
-      for (let i = 0; i < 132; i++) {
-        const along = -394 + i * 6;
-        addPerson(along, y + 0.95, side * (263 + row * 4.4), 0.7 + Math.random() * 0.42);
-        addPerson(side * (263 + row * 4.4), y + 0.95, along, 0.7 + Math.random() * 0.42);
+    // Des tribunes proches des longues portions du circuit, avec des rangées de spectateurs debout des deux côtés.
+    const sections = [[0,1],[4,5],[10,11],[18,19],[25,26]];
+    for (const [ia, ib] of sections) {
+      const a = track[ia], b = track[ib], dx = b[0] - a[0], dz = b[1] - a[1], length = Math.hypot(dx, dz) || 1;
+      const ux = dx / length, uz = dz / length, ox = -uz, oz = ux, yaw = Math.atan2(-uz, ux), railLength = Math.max(34, length * 0.9);
+      for (const side of [-1, 1]) {
+        const cx = (a[0] + b[0]) / 2 + ox * side * 17, cz = (a[1] + b[1]) / 2 + oz * side * 17;
+        for (let row = 0; row < 7; row++) {
+          const across = side * (row - 3) * 1.3, rx = cx + ox * across, rz = cz + oz * across, rowY = 0.7 + row * 0.92;
+          addBox(rx, rowY, rz, railLength, 0.48, 1.28, row % 2 ? seats : stand, yaw);
+          for (let along = -railLength / 2 + 1; along < railLength / 2; along += 1.45) {
+            addPerson(rx + ux * along, rowY + 0.25, rz + uz * along, 0.88 + Math.random() * 0.16);
+          }
+        }
+        addBox(cx, 7.9, cz + oz * side * 1.5, railLength, 0.25, 0.32, stand, yaw);
       }
     }
-    // Deux anneaux lointains de silhouettes : la foule se prolonge jusqu’au brouillard.
-    for (const radius of [454, 585]) for (let i = 0; i < 260; i++) {
-      const a = i / 260 * Math.PI * 2;
-      for (let row = 0; row < 2; row++) {
-        const r = radius + row * 5, scale = radius > 500 ? 0.42 : 0.55;
-        addPerson(Math.cos(a) * r, 1.9 + row * 0.72, Math.sin(a) * r, scale);
-      }
+    torso.count = heads.count = people;
+    torso.instanceMatrix.needsUpdate = heads.instanceMatrix.needsUpdate = true;
+    if (torso.instanceColor) torso.instanceColor.needsUpdate = true;
+    if (heads.instanceColor) heads.instanceColor.needsUpdate = true;
+    torso.castShadow = heads.castShadow = false; torso.receiveShadow = heads.receiveShadow = false;
+    group.add(torso, heads);
+
+    // Drapeaux de commissaires et de course aux points visibles du circuit.
+    const poleGeo = new THREE.CylinderGeometry(0.055, 0.075, 5.4, 6), poleMat = mat(0x343a40, 0.8);
+    const flagMats = [0xe43842,0xffd23f,0xf2f3f5,0x39a6cf].map(color => new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
+    for (const i of [2,5,8,11,14,17,20,23,26,28]) {
+      const p = track[i], radial = Math.hypot(p[0], p[1]) || 1, fx = p[0] + p[0] / radial * 15, fz = p[1] + p[1] / radial * 15;
+      const pole = new THREE.Mesh(poleGeo, poleMat); pole.position.set(fx, 2.7, fz); group.add(pole);
+      const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.9), flagMats[i % flagMats.length]);
+      flag.position.set(fx + 0.8, 4.8, fz); flag.rotation.y = Math.atan2(-tz, tx); group.add(flag);
     }
-    crowd.count = n; crowd.instanceMatrix.needsUpdate = true; crowd.instanceColor.needsUpdate = true; crowd.castShadow = false; crowd.receiveShadow = false; group.add(crowd);
-    const nx2 = -tz, nz2 = tx, support = mat(0x48565f, 0.38, 0.55), lights = mat(0xdde8f1, 0.3, 0.5);
-    for (const side of [-1, 1]) { const x = start[0] + nx2 * side * 8.5, z = start[1] + nz2 * side * 8.5; addBox(x, y + 2.5, z, 0.45, 5, 0.45, support); }
-    addBox(start[0], y + 5, start[1], 18, 0.55, 0.75, support, Math.atan2(-nz2, nx2));
-    for (let i = 0; i < 8; i++) addBox(start[0] - 3.5 + i, y + 4.72, start[1], 0.5, 0.2, 0.24, lights);
   }
   if (preset === 'sky') {
     // Un océan continu remplace entièrement la plaine; la piste de bois reste suspendue au-dessus.
@@ -540,17 +583,17 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
     ocean.rotation.x = -Math.PI / 2; ocean.position.y = 1.05; ocean.receiveShadow = true; group.add(ocean);
     // Petit marécage et cimetière dans un seul coin, loin du parcours.
     const swampMat = mat(0x48584c, 0.98), graveMat = mat(0x68706c, 0.95), deadMat = mat(0x352f2b, 0.98);
-    const island = new THREE.Mesh(new THREE.CircleGeometry(1, 40), swampMat); island.rotation.x = -Math.PI / 2; island.scale.set(32, 23, 1); island.position.set(-292, 1.34, 282); group.add(island);
+    const island = new THREE.Mesh(new THREE.CircleGeometry(1, 40), swampMat); island.rotation.x = -Math.PI / 2; island.scale.set(19, 14, 1); island.position.set(-88, 1.34, 86); group.add(island);
     for (let i = 0; i < 6; i++) {
-      const x = -306 + i * 5.2, z = 278 + (i % 2) * 5;
+      const x = -99 + i * 4.2, z = 82 + (i % 2) * 4;
       const stone = new THREE.Mesh(new THREE.BoxGeometry(1.35, 1.6, 0.38), graveMat); stone.position.set(x, 2.18, z); stone.rotation.z = (i % 2 ? 1 : -1) * 0.1; group.add(stone);
       addBox(x, 2.9, z, 0.32, 0.72, 0.42, graveMat);
     }
-    for (const [x,z,h] of [[-309,286,8],[-280,273,6],[-290,299,7]]) {
+    for (const [x,z,h] of [[-99,91,6],[-80,79,5],[-90,105,6]]) {
       const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.42,h,6), deadMat); trunk.position.set(x,1.34+h/2,z); trunk.rotation.z = 0.08; group.add(trunk);
       for (const side of [-1,1]) addBox(x + side * 1.1, 1.34 + h * 0.68, z, 2.4, 0.18, 0.2, deadMat, side * 0.34);
     }
-    const path = [[0,0],[48,-16],[82,-72],[132,-102],[192,-84],[224,-28],[210,38],[162,78],[106,50],[55,83],[0,52],[-40,12],[-28,-44],[24,-84],[76,-72],[0,0]];
+    const path = [[0,0],[14,-18],[34,-22],[48,-8],[48,8],[34,22],[14,18],[0,0],[-14,18],[-34,22],[-48,8],[-48,-8],[-34,-22],[-14,-18],[0,0]];
     const poleMat = mat(0x694126, 0.92), barrelMat = mat(0xc76025, 0.84), bandMat = mat(0x282d31, 0.48, 0.45), plankMat = mat(0x765136, 0.92);
     const slopeTexture = presetRoadTex('sky');
     slopeTexture.repeat.set(1, 1);
@@ -562,19 +605,22 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
       for (const yy of [0.27, 0.76]) { const band = new THREE.Mesh(new THREE.TorusGeometry(0.49, 0.055, 6, 14), bandMat); band.rotation.x = Math.PI / 2; band.position.set(x, y + yy, z); group.add(band); }
       colliders.push({ x, z, hx: 0.68, hz: 0.68 });
     };
-    for (const [x,z] of [[58,-42],[204,10],[-8,43],[152,65],[110,-92],[220,-10],[70,66],[-14,-64]]) placeBarrel(x, z);
+    for (const [x,z] of [[40,-15],[40,15],[0,0],[-40,15],[-40,-15],[0,5],[0,-5]]) placeBarrel(x, z);
     const plank = (x, z, angle = 0, width = 4.2) => {
       const y = deckY(x, z), beam = new THREE.Mesh(new THREE.BoxGeometry(width, 0.72, 0.7), plankMat);
       beam.position.set(x, y + 0.36, z); beam.rotation.y = angle; beam.castShadow = true; beam.receiveShadow = true; group.add(beam);
       const co = Math.abs(Math.cos(angle)), si = Math.abs(Math.sin(angle));
       colliders.push({ x, z, hx: co * width / 2 + si * 0.45, hz: si * width / 2 + co * 0.45 });
     };
-    plank(30, -10, 0.32); plank(112, -91, -0.55); plank(215, -2, 0.18); plank(72, 68, -0.48); plank(-14, -64, 0.62);
-    // Trois petites bosses en bois, avec une montée et une descente douces intégrées au tablier.
-    makeDeckSlope(65, -44, 6.1, 28, 2.0, Math.atan2(34, -56), slopeTopMat, poleMat);
-    makeDeckSlope(162, -93, 6.1, 30, 2.6, Math.atan2(60, 18), slopeTopMat, poleMat);
-    makeDeckSlope(80.5, 66.5, 6.1, 26, 2.1, Math.atan2(-51, 33), slopeTopMat, poleMat);
-    for (const [x,z] of [[-145,-28],[247,86],[-92,116],[104,-139]]) {
+    plank(35, -2, 0.32); plank(-35, 2, -0.55); plank(0, 22, Math.PI * 0.5); plank(0, -22, Math.PI * 0.5);
+    // Six crêtes pointues, doublant les anciennes pentes sur le circuit resserré.
+    makeDeckSlope(24, -20, 6.1, 12, 2.8, Math.atan2(20, -4), slopeTopMat, poleMat, true);
+    makeDeckSlope(48, 0, 6.1, 10, 3.4, 0, slopeTopMat, poleMat, true);
+    makeDeckSlope(24, 20, 6.1, 12, 2.8, Math.atan2(-20, -4), slopeTopMat, poleMat, true);
+    makeDeckSlope(-24, 20, 6.1, 12, 3.0, Math.atan2(-20, 4), slopeTopMat, poleMat, true);
+    makeDeckSlope(-48, 0, 6.1, 10, 3.4, Math.PI, slopeTopMat, poleMat, true);
+    makeDeckSlope(-24, -20, 6.1, 12, 3.0, Math.atan2(20, 4), slopeTopMat, poleMat, true);
+    for (const [x,z] of [[0,-28],[0,28],[-58,0],[58,0]]) {
       const support = groundY(x,z), pole = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.68,Math.max(1,54-support),8), poleMat); pole.position.set(x,support + Math.max(1,54-support)/2,z); pole.castShadow = true; group.add(pole);
     }
   }
@@ -955,7 +1001,11 @@ export function createWorld(scene, id, quality = 'med', real = null) {
     const detailScale = real.syntheticScale || 1, detailGroup = new THREE.Group();
     detailGroup.scale.set(detailScale, 1, detailScale); group.add(detailGroup);
     const firstRamp = rampDefs.length;
-    addPresetDetails(detailGroup, real.preset, realApi, real.half, quality, rampDefs, colliders, lowPowerMountain);
+    const detailApi = detailScale === 1 ? realApi : {
+      elev: (x, z) => realApi.elev(x * detailScale, z * detailScale),
+      deckY: (x, z) => realApi.deckY(x * detailScale, z * detailScale)
+    };
+    addPresetDetails(detailGroup, real.preset, detailApi, real.half, quality, rampDefs, colliders, lowPowerMountain);
     if (detailScale !== 1) for (let i = firstRamp; i < rampDefs.length; i++) {
       const r = rampDefs[i]; r.x *= detailScale; r.z *= detailScale; r.width *= detailScale; r.length *= detailScale;
     }
@@ -1191,7 +1241,7 @@ export function createWorld(scene, id, quality = 'med', real = null) {
         if (Math.abs(lx) <= r.width / 2 && Math.abs(lz) <= r.length / 2) {
           const t = lz / r.length + 0.5, rise = r.curved ? r.height * (0.5 - 0.5 * Math.cos(Math.PI * t)) : r.height * t;
           const base = r.deck && realApi && realApi.deckY ? (realApi.deckY(x, z) ?? realApi.elev(x, z)) : (realApi && realApi.elev ? realApi.elev(x, z) : 0);
-          const lift = r.hump ? r.height * (0.5 - 0.5 * Math.cos(2 * Math.PI * t)) : rise;
+          const lift = r.pointy ? r.height * (1 - Math.abs(2 * t - 1)) : r.hump ? r.height * (0.5 - 0.5 * Math.cos(2 * Math.PI * t)) : rise;
           return { y: base + r.baseOffset + lift, t, dirX: Math.sin(r.angle), dirZ: Math.cos(r.angle) };
         }
       }

@@ -85,8 +85,10 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
     if (bad) continue;
     const c = cls();
     const riverOffsets = preset === 'city' ? P.map(([x, z]) => x - 18 * Math.sin(z / 105)) : [];
-    const bridge = preset === 'city' && Math.min(...riverOffsets) < -11 && Math.max(...riverOffsets) > 11 && Math.max(...P.map(p => p[0])) - Math.min(...P.map(p => p[0])) > 24;
-    const rec = { a: e.a, b: e.b, P, cls: c, bridge }; placed.push(rec);
+    const crossesRiver = preset === 'city' && Math.min(...riverOffsets) < -11 && Math.max(...riverOffsets) > 11;
+    // Les rues ordinaires s'arrêtent aux berges : le seul franchissement est le pont dédié plus bas.
+    if (crossesRiver) continue;
+    const rec = { a: e.a, b: e.b, P, cls: c, bridge: false }; placed.push(rec);
     e.a.deg++; e.b.deg++;
   }
   // un carrefour ne doit pas n'avoir que des pistes cyclables : au moins une vraie route
@@ -312,7 +314,7 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
     addCourse(trail, 'cycleway', { name: 'Sentier enneigé', surface: 'snow' });
   }
   if (preset === 'sky') {
-    const route = [[0, 0], [48, -16], [82, -72], [132, -102], [192, -84], [224, -28], [210, 38], [162, 78], [106, 50], [55, 83], [0, 52], [-40, 12], [-28, -44], [24, -84], [76, -72]];
+    const route = [[0,0],[14,-18],[34,-22],[48,-8],[48,8],[34,22],[14,18],[0,0],[-14,18],[-34,22],[-48,8],[-48,-8],[-34,-22],[-14,-18],[0,0]];
     addCourse(route, 'residential', { name: 'Relais dans le ciel', surface: 'wood', bridge: 'yes', layer: '1' }, true);
   }
   return { elements: els, half, nBuildings: bs.length };
@@ -354,7 +356,7 @@ function syntheticHeight(preset, seed) {
 
 // ville prête à jouer : même structure que la carte réelle
 export function makeCity(seed, tri, half = 400, preset = 'city') {
-  const scale = preset === 'skate' ? 0.72 : preset === 'f1' ? 0.65 : 1;
+  const scale = preset === 'skate' ? 0.58 : preset === 'f1' ? 0.52 : 1;
   const j = generateCityJSON(seed, half, preset);
   if (scale !== 1) for (const el of j.elements) if (Array.isArray(el.geometry)) {
     el.geometry = el.geometry.map(p => {
