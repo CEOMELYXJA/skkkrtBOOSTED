@@ -307,7 +307,7 @@ function graffitiTexture() {
   g.globalAlpha = 1; g.filter = 'none';
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANI(); return t;
 }
-function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = []) {
+function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = [], colliders = [], lowPowerMountain = false) {
   const mat = (color, roughness = 0.85, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness, side: THREE.DoubleSide });
   const addBox = (x, y, z, sx, sy, sz, material, angle = 0) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material); m.position.set(x, y, z); m.rotation.y = angle; m.castShadow = true; m.receiveShadow = true; group.add(m); return m;
@@ -329,6 +329,22 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
     rampDefs.push({ x, z, width, length, height, angle, baseOffset });
     return { endX: x + s * length / 2, endZ: z + c * length / 2, endY: at(0, length / 2) + height };
   };
+  const makeCurvedRampMesh = (x, z, width, length, height, angle, material, baseOffset = 0.05) => {
+    const c = Math.cos(angle), s = Math.sin(angle), segments = 12, vertices = [], indices = [];
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments, lz = (t - 0.5) * length, rise = height * (0.5 - 0.5 * Math.cos(Math.PI * t));
+      for (const lx of [-width / 2, width / 2]) {
+        const wx = x + c * lx + s * lz, wz = z - s * lx + c * lz;
+        vertices.push(lx, groundY(wx, wz) + baseOffset + rise, lz);
+      }
+    }
+    for (let i = 0; i < segments; i++) { const a = i * 2; indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3)); geo.setIndex(indices); geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, material); m.position.set(x, 0, z); m.rotation.y = angle; m.castShadow = true; m.receiveShadow = true; group.add(m);
+    rampDefs.push({ x, z, width, length, height, angle, baseOffset, curved: true });
+    const endX = x + s * length / 2, endZ = z + c * length / 2;
+    return { endX, endZ, endY: groundY(endX, endZ) + baseOffset + height };
+  };
   if (preset === 'mountain') {
     const trail = [[0,0],[28,-44],[62,-82],[94,-116],[130,-128],[166,-95],[202,-46],[236,6],[265,55],[236,96],[198,130],[154,156],[112,142],[72,106],[35,65],[0,22]];
     const nearestTrail = (x, z) => {
@@ -341,21 +357,25 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
       return best;
     };
     // Forêt décorative en quatre lots instanciés, sans arbre ni collision dans le couloir du sentier.
-    const capacity = ({ low: 2400, med: 4200, high: 6200, ultra: 8400 })[quality] || 4200;
-    const density = ({ low: 0.23, med: 0.43, high: 0.62, ultra: 0.84 })[quality] || 0.43;
-    const trunkGeo = new THREE.CylinderGeometry(0.18, 0.3, 3.2, 5);
-    const leafGeo = new THREE.ConeGeometry(1, 1, 7);
+    const capacity = lowPowerMountain
+      ? ({ low: 700, med: 1350, high: 1900, ultra: 2400 })[quality] || 1100
+      : ({ low: 2400, med: 4200, high: 6200, ultra: 8400 })[quality] || 4200;
+    const density = lowPowerMountain ? 0.38 : (({ low: 0.23, med: 0.43, high: 0.62, ultra: 0.84 })[quality] || 0.43);
+    const treeStep = lowPowerMountain ? 12.6 : 9.8;
+    const trunkGeo = new THREE.CylinderGeometry(0.18, 0.3, 3.2, lowPowerMountain ? 4 : 5);
+    const leafGeo = new THREE.ConeGeometry(1, 1, lowPowerMountain ? 5 : 7);
     const bark = mat(0x4b382a, 1), pine = mat(th.snow ? 0x718178 : 0x244b39, 0.96);
-    const trunk = new THREE.InstancedMesh(trunkGeo, bark, capacity), foliage = [0,1,2].map(() => new THREE.InstancedMesh(leafGeo, pine, capacity));
+    const trunk = new THREE.InstancedMesh(trunkGeo, bark, capacity);
+    const foliage = Array.from({ length: lowPowerMountain ? 2 : 3 }, () => new THREE.InstancedMesh(leafGeo, pine, capacity));
     const dummy = new THREE.Object3D(); let trees = 0;
     const hash = (a, b, n = 0) => { const v = Math.sin(a * 127.1 + b * 311.7 + n * 74.7) * 43758.5453; return v - Math.floor(v); };
-    for (let gx = -half + 12, ix = 0; gx < half - 12; gx += 9.8, ix++) for (let gz = -half + 12, iz = 0; gz < half - 12; gz += 9.8, iz++) {
+    for (let gx = -half + 12, ix = 0; gx < half - 12; gx += 9.8, ix++) for (let gz = -half + 12, iz = 0; gz < half - 12; gz += treeStep, iz++) {
       if (trees >= capacity || hash(ix, iz) > density) continue;
       const x = gx + (hash(ix, iz, 1) - 0.5) * 5.4, z = gz + (hash(ix, iz, 2) - 0.5) * 5.4;
       if (nearestTrail(x, z) < 9) continue;
       const scale = 0.78 + hash(ix, iz, 3) * 0.68, y = groundY(x, z), angle = hash(ix, iz, 4) * Math.PI * 2;
       dummy.position.set(x, y + 1.6 * scale, z); dummy.rotation.set(0, angle, 0); dummy.scale.set(scale, scale, scale); dummy.updateMatrix(); trunk.setMatrixAt(trees, dummy.matrix);
-      const tiers = [[1.7, 3.6, 4.1],[1.35, 3.2, 6.2],[0.96, 2.8, 8.2]];
+      const tiers = lowPowerMountain ? [[1.7, 3.8, 4.2],[1.05, 3.1, 7.3]] : [[1.7, 3.6, 4.1],[1.35, 3.2, 6.2],[0.96, 2.8, 8.2]];
       tiers.forEach(([r,h,cy], k) => {
         dummy.position.set(x, y + cy * scale, z); dummy.rotation.set(0, angle, 0); dummy.scale.set(r * scale, h * scale, r * scale); dummy.updateMatrix(); foliage[k].setMatrixAt(trees, dummy.matrix);
       });
@@ -364,11 +384,7 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
     trunk.count = trees; trunk.instanceMatrix.needsUpdate = true; trunk.castShadow = false; trunk.receiveShadow = false; group.add(trunk);
     foliage.forEach(f => { f.count = trees; f.instanceMatrix.needsUpdate = true; f.castShadow = false; f.receiveShadow = false; group.add(f); });
 
-    const dirt = mat(0x715239, 0.98);
-    const jump = (x, z, width, length, height, angle) => makeRampMesh(x, z, width, length, height, angle, dirt, 0.04);
-    jump(140, -111, 8, 14, 1.7, Math.atan2(36, 33));
-    jump(219, -20, 8, 15, 2.0, Math.atan2(34, 52));
-    jump(174, 144, 8, 13, 1.5, Math.atan2(-44, 26));
+
   }
   if (preset === 'skate') {
     const texture = presetRoadTex('skate'); texture.repeat.set(22, 22);
@@ -381,6 +397,11 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
       addBox(endX, endY + 0.09, endZ, width, 0.12, 0.18, rail, angle);
     };
     ramp(-35, -32, 20, 18, 4.2, 0.18); ramp(38, 20, 18, 15, 3.4, Math.PI * 0.55); ramp(-14, 52, 22, 20, 5.5, Math.PI * 0.48); ramp(66, -47, 14, 14, 2.8, -0.38);
+    ramp(-92, -74, 18, 14, 2.7, -0.3); ramp(94, -62, 17, 15, 3.0, 0.72);
+    ramp(-82, 91, 18, 15, 3.2, 1.05); ramp(79, 98, 20, 14, 3.6, -0.48); ramp(4, -108, 18, 13, 2.4, 0);
+    const curvedRamp = (x, z, width, length, height, angle = 0) => makeCurvedRampMesh(x, z, width, length, height, angle, rampMat, 0.05);
+    curvedRamp(-100, 8, 18, 16, 3.3, Math.PI * 0.5); curvedRamp(22, 104, 20, 16, 3.6, 0);
+    curvedRamp(102, 12, 17, 14, 3.0, Math.PI * 0.5); curvedRamp(-22, -101, 19, 15, 3.4, 0);
     const grind = (x, z, len, angle, h = 0.75) => {
       const y = groundY(x, z);
       const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = angle; group.add(g);
@@ -505,29 +526,22 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
       for (const side of [-1,1]) addBox(x + side * 1.1, 1.34 + h * 0.68, z, 2.4, 0.18, 0.2, deadMat, side * 0.34);
     }
     const path = [[0,0],[48,-16],[82,-72],[132,-102],[192,-84],[224,-28],[210,38],[162,78],[106,50],[55,83],[0,52],[-40,12],[-28,-44],[24,-84],[76,-72],[0,0]];
-    const poleMat = mat(0x694126, 0.92), ropeMat = mat(0x4b3426, 0.96), barrelMat = mat(0xc76025, 0.84), bandMat = mat(0x282d31, 0.48, 0.45);
-    const rails = [[], []];
-    for (let i = 0; i < path.length - 1; i++) {
-      const a = path[i], b = path[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz) || 1, nx = -dz / len, nz = dx / len, steps = Math.max(1, Math.ceil(len / 18));
-      for (let sideIndex = 0; sideIndex < 2; sideIndex++) {
-        const side = sideIndex === 0 ? -1 : 1;
-        for (let k = 0; k <= steps; k++) {
-          if (i && k === 0) continue;
-          const t = k / steps, cx = a[0] + dx * t, cz = a[1] + dz * t, x = cx + nx * side * 3.6, z = cz + nz * side * 3.6, deck = deckY(cx, cz);
-          addBox(x, deck + 0.78, z, 0.16, 1.55, 0.16, poleMat);
-          rails[sideIndex].push([x, deck + 1.35, z]);
-        }
-      }
-    }
-    const rope = (a, b) => {
-      const A = new THREE.Vector3(a[0], a[1], a[2]), B = new THREE.Vector3(b[0], b[1], b[2]), curve = new THREE.QuadraticBezierCurve3(A, A.clone().lerp(B, 0.5).add(new THREE.Vector3(0, -0.28, 0)), B);
-      const m = new THREE.Mesh(new THREE.TubeGeometry(curve, 8, 0.045, 5, false), ropeMat); group.add(m);
+    const poleMat = mat(0x694126, 0.92), barrelMat = mat(0xc76025, 0.84), bandMat = mat(0x282d31, 0.48, 0.45), plankMat = mat(0x765136, 0.92);
+    // Les cordes et poteaux latéraux décoratifs sont retirés pour dégager le parcours aérien.
+    const placeBarrel = (x, z) => {
+      const y = deckY(x, z) + 0.12, barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.52, 1.05, 10), barrelMat);
+      barrel.position.set(x, y + 0.53, z); barrel.castShadow = true; group.add(barrel);
+      for (const yy of [0.27, 0.76]) { const band = new THREE.Mesh(new THREE.TorusGeometry(0.49, 0.055, 6, 14), bandMat); band.rotation.x = Math.PI / 2; band.position.set(x, y + yy, z); group.add(band); }
+      colliders.push({ x, z, hx: 0.68, hz: 0.68 });
     };
-    for (const side of rails) { for (let i = 0; i < side.length - 1; i++) rope(side[i], side[i + 1]); if (side.length > 2) rope(side[side.length - 1], side[0]); }
-    for (const [x, z] of [[58,-42],[204,10],[-8,43],[152,65]]) {
-      const y = deckY(x,z) + 0.12, barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.52, 1.05, 12), barrelMat); barrel.position.set(x,y + 0.53,z); barrel.castShadow = true; group.add(barrel);
-      for (const yy of [0.27,0.76]) { const band = new THREE.Mesh(new THREE.TorusGeometry(0.49,0.055,8,18), bandMat); band.rotation.x = Math.PI / 2; band.position.set(x,y + yy,z); group.add(band); }
-    }
+    for (const [x,z] of [[58,-42],[204,10],[-8,43],[152,65],[110,-92],[220,-10],[70,66],[-14,-64]]) placeBarrel(x, z);
+    const plank = (x, z, angle = 0, width = 4.2) => {
+      const y = deckY(x, z), beam = new THREE.Mesh(new THREE.BoxGeometry(width, 0.72, 0.7), plankMat);
+      beam.position.set(x, y + 0.36, z); beam.rotation.y = angle; beam.castShadow = true; beam.receiveShadow = true; group.add(beam);
+      const co = Math.abs(Math.cos(angle)), si = Math.abs(Math.sin(angle));
+      colliders.push({ x, z, hx: co * width / 2 + si * 0.45, hz: si * width / 2 + co * 0.45 });
+    };
+    plank(30, -10, 0.32); plank(112, -91, -0.55); plank(215, -2, 0.18); plank(72, 68, -0.48); plank(-14, -64, 0.62);
     for (const [x,z] of [[-145,-28],[247,86],[-92,116],[104,-139]]) {
       const support = groundY(x,z), pole = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.68,Math.max(1,54-support),8), poleMat); pole.position.set(x,support + Math.max(1,54-support)/2,z); pole.castShadow = true; group.add(pole);
     }
@@ -610,7 +624,13 @@ export function createWorld(scene, id, quality = 'med', real = null) {
   const scenicMountains = !!(real && real.synthetic && real.preset === 'mountain');
   const skyOcean = !!(real && real.synthetic && real.preset === 'sky');
   const scenicF1 = !!(real && real.synthetic && real.preset === 'f1');
+  const scenicSkate = !!(real && real.synthetic && real.preset === 'skate');
+  const lowPowerMountain = scenicMountains && (
+    (typeof navigator !== 'undefined' && (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.deviceMemory || 8) <= 4)) ||
+    (typeof matchMedia === 'function' && matchMedia('(max-width: 700px)').matches)
+  );
   if (scenicF1 && !th.snow) { th.ground = 0x636a70; th.lawn = 0x72787d; th.road = 0x2d3238; th.walk = 0x72787d; th.curb = 0xb0b4b7; th.hill = 0x454c54; }
+  if (scenicSkate) { th.ground = 0x777d80; th.lawn = 0x858b8e; th.road = 0x555b5e; th.walk = 0x959a9c; th.curb = 0xb9bdbe; th.hill = 0x575d60; }
   const rampDefs = [];
   const group = new THREE.Group();
   scene.add(group);
@@ -623,11 +643,11 @@ export function createWorld(scene, id, quality = 'med', real = null) {
   /* ---- matériaux */
   const std = (o) => new THREE.MeshStandardMaterial(o);
   const GS = real ? 7000 : 1400;
-  const gTex = detailTex((quality === 'low' ? 256 : 512) * Math.min(4, TRES())); gTex.repeat.set(GS / 14, GS / 14);
+  const gTex = detailTex((quality === 'low' || lowPowerMountain ? 256 : 512) * Math.min(lowPowerMountain ? 2 : 4, TRES())); gTex.repeat.set(GS / 14, GS / 14);
   const lTex = gTex.clone(); lTex.needsUpdate = true; lTex.repeat.set(PARK * 2 / 14, PARK * 2 / 14);
   const groundMat = std({ color: th.ground, roughness: 1, map: gTex });
   if (th.patchy && !permanentSnow) patchySnow(groundMat, th.patchy); // printemps : neige par plaques
-  if (natureOn() && !th.snow && !permanentSnow && !scenicF1) grassyGround(groundMat, th); // herbe naturelle, sauf sur la piste F1 et la neige
+  if (natureOn() && !th.snow && !permanentSnow && !scenicF1 && !scenicSkate) grassyGround(groundMat, th); // herbe naturelle, sauf neige, F1 et béton du skatepark
   if (premium()) try {                                                  // relief fin et rugosité variable du sol (herbe / neige)
     const gp = groundPBR(); gp.normal.repeat.copy(gTex.repeat); gp.rough.repeat.copy(gTex.repeat);
     groundMat.normalMap = gp.normal; groundMat.roughnessMap = gp.rough; groundMat.normalScale.set(0.7, 0.7);
@@ -857,8 +877,8 @@ export function createWorld(scene, id, quality = 'med', real = null) {
   {
     const vistaPreset = real && real.synthetic ? real.preset : null;
     const R0 = real && real.synthetic ? real.half * (vistaPreset === 'mountain' ? 0.86 : vistaPreset === 'skate' ? 1.16 : 1.3) : 290, R1 = R0 + (vistaPreset === 'mountain' ? 900 : 500);
-    const NA = quality === 'low' ? 180 : quality === 'med' ? 320 : quality === 'high' ? 480 : 800;     // segments autour
-    const NR = quality === 'low' ? 36 : quality === 'med' ? 64 : quality === 'high' ? 96 : 160;        // segments en profondeur
+    const NA = lowPowerMountain ? 180 : quality === 'low' ? 180 : quality === 'med' ? 320 : quality === 'high' ? 480 : 800;     // relief allégé sur téléphone
+    const NR = lowPowerMountain ? 36 : quality === 'low' ? 36 : quality === 'med' ? 64 : quality === 'high' ? 96 : 160;        // maillage d'horizon
     const pos = [], col = [], idx = [];
     const base = new THREE.Color(vistaPreset === 'mountain' ? (th.snow ? 0x9ca9b2 : 0x40594f) : vistaPreset === 'f1' ? 0x414a53 : th.hill), c = new THREE.Color();
     const hFn = (x, z, r) => {
@@ -899,7 +919,7 @@ export function createWorld(scene, id, quality = 'med', real = null) {
   let realApi = null;
   const customRoadTex = real && real.synthetic && ['snow', 'skate', 'mountain', 'sky'].includes(real.preset) ? (theme, kind, tr) => presetRoadTex(real.preset, tr) : roadTex;
   if (real) realApi = buildReal(group, th, quality, real, { wallTex, laneTex, roadTex: customRoadTex, layer, groundMat, GS });
-  if (real && real.synthetic) addPresetDetails(group, real.preset, realApi, real.half, quality, rampDefs);
+  if (real && real.synthetic) addPresetDetails(group, real.preset, realApi, real.half, quality, rampDefs, colliders, lowPowerMountain);
   const tr = realApi && !(real && real.synthetic && real.preset !== 'city') ? createTraffic(group, real, th, quality, makeCyclist, th.night != null ? th.night : (id === 'neon' || id === 'sunset'), realApi.deckY) : null;   // piétons, voitures, cyclistes
 
   /* ---- ciel, nuages, étoiles, neige */
@@ -1128,7 +1148,10 @@ export function createWorld(scene, id, quality = 'med', real = null) {
       for (const r of rampDefs) {
         const dx = x - r.x, dz = z - r.z, c = Math.cos(r.angle), s = Math.sin(r.angle);
         const lx = c * dx - s * dz, lz = s * dx + c * dz;
-        if (Math.abs(lx) <= r.width / 2 && Math.abs(lz) <= r.length / 2) return { y: (realApi && realApi.elev ? realApi.elev(x, z) : 0) + r.baseOffset + r.height * (lz / r.length + 0.5), t: lz / r.length + 0.5, dirX: Math.sin(r.angle), dirZ: Math.cos(r.angle) };
+        if (Math.abs(lx) <= r.width / 2 && Math.abs(lz) <= r.length / 2) {
+          const t = lz / r.length + 0.5, rise = r.curved ? r.height * (0.5 - 0.5 * Math.cos(Math.PI * t)) : r.height * t;
+          return { y: (realApi && realApi.elev ? realApi.elev(x, z) : 0) + r.baseOffset + rise, t, dirX: Math.sin(r.angle), dirZ: Math.cos(r.angle) };
+        }
       }
       return null;
     },

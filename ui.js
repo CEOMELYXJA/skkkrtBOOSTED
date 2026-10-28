@@ -43,6 +43,7 @@ function toggle(parent, label, key) {
 function group(root, title) { const g = h('section', 'grp'); g.append(h('h3', null, title)); root.append(g); return g; }
 
 export function buildPanel(root, cb) {
+  root.tabIndex = -1;
   root.innerHTML = '';
   const head = h('div', 'phead', '<b>Réglages</b>');
   const close = h('button', 'x', '✕'); close.type = 'button'; close.setAttribute('aria-label', 'Fermer'); close.onclick = () => cb.close();
@@ -205,4 +206,47 @@ export function buildPanel(root, cb) {
   let first = 'image'; try { first = sessionStorage.getItem('panelTab') || 'image'; } catch {}
   show(TABS.some(t => t[0] === first) ? first : 'image');
   syncs.forEach(s => s());
+  root.addEventListener('keydown', e => {
+    if (root.hidden) return;
+    const directions = {
+      ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1],
+      ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0]
+    };
+    const dir = directions[e.code]; if (!dir) return;
+    const active = document.activeElement;
+    if (!root.contains(active)) {
+      (root.querySelector('.ptabs button') || root).focus(); e.preventDefault(); return;
+    }
+    if (active.matches('input[type="range"]')) {
+      if (e.code === 'KeyA' || e.code === 'KeyD') {
+        const step = Number(active.step) || 1, lo = Number(active.min), hi = Number(active.max);
+        active.value = String(Math.max(lo, Math.min(hi, Number(active.value) + dir[0] * step)));
+        active.dispatchEvent(new Event('input', { bubbles: true })); e.preventDefault(); return;
+      }
+      if (e.key.startsWith('Arrow')) return;
+    }
+    const segment = active.closest('.seg');
+    if (dir[0] && segment && active.matches('button')) {
+      const choices = Array.from(segment.querySelectorAll('button')).filter(b => !b.closest('[hidden]'));
+      const i = choices.indexOf(active), next = choices[(i + dir[0] + choices.length) % choices.length];
+      if (next) { next.focus(); next.click(); }
+      e.preventDefault(); return;
+    }
+    const controls = Array.from(root.querySelectorAll('button:not(:disabled), input:not(:disabled)')).filter(el => !el.closest('[hidden]'));
+    const r = active.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    let best = null, bestScore = Infinity;
+    for (const el of controls) {
+      if (el === active) continue;
+      const q = el.getBoundingClientRect(), cx = q.left + q.width / 2, cy = q.top + q.height / 2;
+      const primary = dir[0] ? (dir[0] > 0 ? cx - x : x - cx) : (dir[1] > 0 ? cy - y : y - cy);
+      if (primary < 2) continue;
+      const secondary = dir[0] ? Math.abs(cy - y) : Math.abs(cx - x);
+      const score = primary + secondary * 1.8;
+      if (score < bestScore) { best = el; bestScore = score; }
+    }
+    if (!best && (dir[1] > 0 || dir[0] > 0)) best = controls[0];
+    if (!best && (dir[1] < 0 || dir[0] < 0)) best = controls[controls.length - 1];
+    if (best) { best.focus(); best.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+    e.preventDefault();
+  });
 }

@@ -147,18 +147,23 @@ const mouse = { idle: 9, locked: false };
   });
 }
 addEventListener('keydown', e => {
-  keys[e.code] = true; if (e.key) kk[e.key.length === 1 ? e.key.toLowerCase() : e.key] = true;
-  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
-  if (e.repeat === false || e.repeat === undefined) {
-    if (e.code === 'KeyJ' && state.started && !paused) air.requested = true;
-    if (e.code === 'Escape' || e.code === 'KeyP') { if (!panel.hidden) closePanel(); else if (state.started) setPause(!paused); }
-    if (e.code === 'KeyM' && state.started) set('showMap', !settings.showMap);
-    if (e.code === 'KeyV' && state.started) extras.toggleVisor();
+  const panelOpen = !panel.hidden;
+  if (!panelOpen) {
+    keys[e.code] = true; if (e.key) kk[e.key.length === 1 ? e.key.toLowerCase() : e.key] = true;
+    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   }
-  if (e.code === 'KeyL') toggleHead();
-  if (e.code === 'KeyR') goHome();
-  if (e.code === 'KeyG') playGame();
-  if (e.code === 'KeyC') calibrate();
+  if (e.repeat === false || e.repeat === undefined) {
+    if (e.code === 'KeyJ' && state.started && !paused && !panelOpen && jumpAllowed()) air.requested = true;
+    if (e.code === 'Escape' || e.code === 'KeyP') { if (!panel.hidden) closePanel(); else if (state.started) setPause(!paused); }
+    if (!panelOpen && e.code === 'KeyM' && state.started) set('showMap', !settings.showMap);
+    if (!panelOpen && e.code === 'KeyV' && state.started) extras.toggleVisor();
+  }
+  if (!panelOpen) {
+    if (e.code === 'KeyL') toggleHead();
+    if (e.code === 'KeyR') goHome();
+    if (e.code === 'KeyG') playGame();
+    if (e.code === 'KeyC') calibrate();
+  }
 });
 addEventListener('keyup', e => { keys[e.code] = false; if (e.key) kk[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; for (const k in kk) kk[k] = false; });
@@ -173,6 +178,7 @@ rig.add(scooter.root);
 scene.add(rig);
 
 let world = null;
+const jumpAllowed = () => !!(world && (world.preset === 'skate' || world.preset === 'snow'));
 /* carte réelle : données OpenStreetMap autour de ta position (gardées tant que tu ne recharges pas) */
 let realData = null, stopGps = null, gps = null, buildId = 0;
 const setVeil = t => { const v = $('#veil span'); if (v) v.textContent = t; };
@@ -870,7 +876,12 @@ function setPause(on) {
   if (paused) { try { document.exitPointerLock(); } catch {} }
   else if (state.started && panel.hidden && matchMedia('(pointer:fine)').matches) { try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch {} }   // reprise : la souris reprend la vue
 }
-function openPanel() { panel.hidden = false; pauseEl.hidden = true; try { document.exitPointerLock(); } catch {} }
+function openPanel() {
+  panel.hidden = false; pauseEl.hidden = true;
+  for (const k in keys) keys[k] = false; for (const k in kk) kk[k] = false;
+  try { document.exitPointerLock(); } catch {}
+  requestAnimationFrame(() => panel.querySelector('.ptabs button')?.focus());
+}
 function closePanel() { panel.hidden = true; pauseEl.hidden = !paused; }
 function goMenu() {                                                   // retour à l'écran d'accueil : monde, vue, jeu, réglages
   paused = false; pauseEl.hidden = true; panel.hidden = true; look.yaw = look.pitch = 0; try { document.exitPointerLock(); } catch {}
@@ -880,7 +891,7 @@ function goMenu() {                                                   // retour 
 $('#bSet').onclick = () => { if (panel.hidden) openPanel(); else closePanel(); };
 $('#bMenu').onclick = () => setPause(!paused);
 $('#bVisor').onclick = () => { extras.toggleVisor(); };
-$('#gSet').onclick = () => { panel.hidden = false; };
+$('#gSet').onclick = openPanel;
 $('#pResume').onclick = () => setPause(false);
 $('#pSet').onclick = openPanel;
 $('#pHome').onclick = goMenu;
@@ -893,7 +904,7 @@ $('#go').onclick = () => {
   newGame();
 };
 $('#ng').onclick = playGame;
-$('#jumpBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (state.started && !paused) air.requested = true; });
+$('#jumpBtn').addEventListener('pointerdown', e => { e.preventDefault(); if (state.started && !paused && jumpAllowed()) air.requested = true; });
 addEventListener('message', () => {});
 
 /* ------------------------------------------------------------ simulation */
@@ -1025,9 +1036,8 @@ const hit = (x, z) => {
   if (world.real) {
     const k = world.api.hitKind(x, z); if (k) { hitWhy = k; return true; }
     if (world.api.inWater(x, z)) { hitWhy = 'water'; return true; }              // l'eau (hors pont) est infranchissable
-    return false;
   }
-  for (const b of world.colliders) if (Math.abs(x - b.x) < b.hx && Math.abs(z - b.z) < b.hz) return true;
+  for (const b of world.colliders || []) if (Math.abs(x - b.x) < b.hx && Math.abs(z - b.z) < b.hz) { hitWhy = 'wall'; return true; }
   return false;
 };
 const loc = (x, y, z, yaw, out) => {
@@ -1173,9 +1183,9 @@ function frame(now) {
     const grounded = !air.active && rig.position.y <= before.y + 0.18;
     if (air.requested) {
       air.requested = false;
-      if (state.started && !fall.on && grounded && !onBridge && state.speed > 0.8) { air.active = true; air.vy = 4.7; }
+      if (jumpAllowed() && state.started && !fall.on && grounded && !onBridge && state.speed > 0.8) { air.active = true; air.vy = 4.7; }
     }
-    if (!air.active && before.ramp && before.ramp.t > 0.82 && !after.ramp && state.speed > 4.5) {
+    if (jumpAllowed() && !air.active && before.ramp && before.ramp.t > 0.82 && !after.ramp && state.speed > 4.5) {
       const along = (vx * before.ramp.dirX + vz * before.ramp.dirZ) / Math.max(0.01, Math.hypot(vx, vz));
       if (along > 0.35) { air.active = true; air.vy = 4.6; state.bump = Math.max(state.bump, 0.25); }
     }
@@ -1250,7 +1260,7 @@ function frame(now) {
     const lane = world.real ? world.api.onLane(rig.position.x, rig.position.z) : onLane(rig.position.x, rig.position.z);
     $('#mlane').textContent = lane ? (world.real ? 'Sur route ✓' : 'Sur piste ✓') : (world.real ? 'Hors route' : 'Hors piste'); $('#mlane').className = 'chip ' + (lane ? 'ok' : 'warn');
     { const sj = !!settings.joystick && !tel; $('#joy').hidden = !sj; $('#hud').classList.toggle('joyOn', sj); if (!sj) { joy.x = joy.y = 0; } }
-    $('#jumpBtn').hidden = !state.started;
+    $('#jumpBtn').hidden = !state.started || !jumpAllowed();
     { const ms = $('#mslope'), rel = !!(world.api && world.api.hasRelief); ms.hidden = !rel;
       if (rel) { const pc = state.slope * 100; ms.textContent = (pc >= 0.5 ? '▲ ' : pc <= -0.5 ? '▼ ' : '▬ ') + Math.abs(pc).toFixed(0) + ' %'; } }
     { const drift = $('#mslide'); drift.hidden = !(world.preset === 'snow' && snowSlide > 0); }
