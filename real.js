@@ -384,17 +384,18 @@ export function buildReal(group, th, quality, D, H) {
         if (waterRec(D, qx, qz) === rec) values.push(E(qx, qz));
       }
       values.sort((a, b) => a - b);
-      rec.bridgeWl = values.length ? values[Math.floor(values.length * 0.2)] : E(x, z);
+      rec.bridgeWl = values.length ? values[Math.floor(values.length * 0.2)] : E(0, 0);
       rec.bridgeWlE = EL;
-      return rec.bridgeWl;
+      // Le tablier monte doucement avant la rivière et redescend après, sans marche aux berges.
+      const t = Math.max(0, Math.min(1, (68 - Math.abs(x)) / 58)), smooth = t * t * (3 - 2 * t);
+      return rec.bridgeWl + 4.5 * smooth;
     };
     const setDeck = (r, s0, rev, L, hA, hB) => {
       const n = r.p.length / 2, tot = r.cl[n - 1], dk = new Float32Array(n);
       for (let i = 0; i < n; i++) {
         const x = r.p[i * 2], z = r.p[i * 2 + 1], sd = s0 + (rev ? tot - r.cl[i] : r.cl[i]);
-        const line = hA + (hB - hA) * (L > 0 ? sd / L : 0), water = bridgeWaterLevel(x, z);
-        const waterClearance = water == null ? -Infinity : water + 4.5;
-        dk[i] = Math.max(line, E(x, z) + deckLift, waterClearance);
+        const line = hA + (hB - hA) * (L > 0 ? sd / L : 0), waterDeck = bridgeWaterLevel(x, z);
+        dk[i] = Math.max(line, E(x, z) + deckLift, waterDeck == null ? -Infinity : waterDeck);
       }
       r.deck = L >= 12 ? dk : null;
     };
