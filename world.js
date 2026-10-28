@@ -543,21 +543,21 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
       heads.setColorAt(people, new THREE.Color(skinColors[Math.floor(Math.random() * skinColors.length)]));
       people++;
     };
-    // Des tribunes proches des longues portions du circuit, avec des rangées de spectateurs debout des deux côtés.
-    const sections = [[0,1],[4,5],[10,11],[18,19],[25,26]];
-    for (const [ia, ib] of sections) {
-      const a = track[ia], b = track[ib], dx = b[0] - a[0], dz = b[1] - a[1], length = Math.hypot(dx, dz) || 1;
-      const ux = dx / length, uz = dz / length, ox = -uz, oz = ux, yaw = Math.atan2(-uz, ux), railLength = Math.max(34, length * 0.9);
+    // Des gradins continus suivent chaque segment du circuit, des deux côtés.
+    const alongStep = 2.5, rows = 5;
+    for (let i = 0; i < track.length; i++) {
+      const a = track[i], b = track[(i + 1) % track.length], dx = b[0] - a[0], dz = b[1] - a[1], length = Math.hypot(dx, dz) || 1;
+      const ux = dx / length, uz = dz / length, ox = -uz, oz = ux, yaw = Math.atan2(-uz, ux), railLength = length + 4;
       for (const side of [-1, 1]) {
-        const cx = (a[0] + b[0]) / 2 + ox * side * 17, cz = (a[1] + b[1]) / 2 + oz * side * 17;
-        for (let row = 0; row < 7; row++) {
-          const across = side * (row - 3) * 1.3, rx = cx + ox * across, rz = cz + oz * across, rowY = 0.7 + row * 0.92;
+        const cx = (a[0] + b[0]) / 2 + ox * side * 13, cz = (a[1] + b[1]) / 2 + oz * side * 13;
+        for (let row = 0; row < rows; row++) {
+          const across = side * (row - (rows - 1) / 2) * 1.28, rx = cx + ox * across, rz = cz + oz * across, rowY = 0.65 + row * 0.82;
           addBox(rx, rowY, rz, railLength, 0.48, 1.28, row % 2 ? seats : stand, yaw);
-          for (let along = -railLength / 2 + 1; along < railLength / 2; along += 1.45) {
+          for (let along = -railLength / 2 + 1; along < railLength / 2; along += alongStep) {
             addPerson(rx + ux * along, rowY + 0.25, rz + uz * along, 0.88 + Math.random() * 0.16);
           }
         }
-        addBox(cx, 7.9, cz + oz * side * 1.5, railLength, 0.25, 0.32, stand, yaw);
+        addBox(cx, 4.65, cz + oz * side * 1.5, railLength, 0.25, 0.32, stand, yaw);
       }
     }
     torso.count = heads.count = people;

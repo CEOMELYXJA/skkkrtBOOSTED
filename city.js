@@ -368,7 +368,7 @@ export function makeCity(seed, tri, half = 400, preset = 'city') {
   D.synthetic = true; D.me = [0, 0]; D.heading = null; D.seed = seed; D.preset = preset; D.syntheticScale = scale;
   const height = syntheticHeight(preset, seed);
   D.syntheticHeight = scale === 1 ? height : (x, z) => height(x / scale, z / scale);
-  const spawn = preset === 'f1' ? [0, -205] : preset === 'skate' ? [-98, -58] : preset === 'snow' ? [270, 0] : [0, 0];
+  const spawn = preset === 'f1' ? [0, -205] : preset === 'skate' ? [-98, -58] : preset === 'snow' ? [270, 0] : preset === 'sky' ? [7, -9] : [0, 0];
   D.me = [spawn[0] * scale, spawn[1] * scale];
   D.syntheticHmin = preset === 'mountain' ? -16 : preset === 'city' ? -20 : preset === 'snow' ? -14 : preset === 'skate' ? -3 : -4;
   return D;

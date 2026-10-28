@@ -354,7 +354,8 @@ const rnd = s => { s = Math.sin(s * 127.1 + 311.7) * 43758.5453; return s - Math
 
 export function buildReal(group, th, quality, D, H) {
   const hi = quality === 'high' || quality === 'ultra', lo = quality === 'low', shadows = shadowsOn(quality);
-  const baseRAD = lo ? 2 : hi ? 4 : 3, RADf = () => (+settings.bldRad) || baseRAD;   // rayon (en morceaux) construit autour du joueur
+  const mountainStream = !!(D.synthetic && D.preset === 'mountain');
+  const baseRAD = mountainStream ? 1 : lo ? 2 : hi ? 4 : 3, RADf = () => mountainStream ? 1 : ((+settings.bldRad) || baseRAD);   // rayon (en morceaux) construit autour du joueur
   const TR = Math.min(4, +settings.texRes || 1);
   const NAT = natureOn();                                          // v9.25 : gazon, feuillage en cartes, textures naturelles, ciel
   const snowGround = !!(th.snow || th.snowOnGround);
@@ -878,7 +879,7 @@ const marks = !!settings.roadMarks, mkRoad = kind => lay(new THREE.MeshStandardM
   }
 
   if (EL && H.groundMat) {                                         // sol lointain : maillage grossier de toute la zone, sous les morceaux détaillés
-    const step = D.half > 2000 ? 60 : 40, ext = D.half + 400, N = Math.ceil(ext * 2 / step), pos = [], nrm = [], uv = [], idx = [];
+    const step = D.synthetic && D.preset === 'mountain' ? 60 : D.half > 2000 ? 60 : 40, ext = D.half + 400, N = Math.ceil(ext * 2 / step), pos = [], nrm = [], uv = [], idx = [];
     for (let b = 0; b <= N; b++) for (let a = 0; a <= N; a++) {
       const x = -ext + a * step, z = -ext + b * step, nn = nAt(x, z);
       pos.push(x, EL(x, z) - 2, z); nrm.push(nn[0], nn[1], nn[2]); uv.push(x / GS + 0.5, z / GS + 0.5);
@@ -906,7 +907,7 @@ const marks = !!settings.roadMarks, mkRoad = kind => lay(new THREE.MeshStandardM
     const lim = Math.ceil(D.half / CH);
     for (let a = -rad; a <= rad; a++) for (let b = -rad; b <= rad; b++) {
       const k = (cx + a) + ',' + (cz + b);
-      if (D.cells.has(k) || (EL && Math.abs(cx + a) <= lim && Math.abs(cz + b) <= lim)) L.push([k, a * a + b * b]);
+      if (D.cells.has(k) || (!mountainStream && EL && Math.abs(cx + a) <= lim && Math.abs(cz + b) <= lim)) L.push([k, a * a + b * b]);
     }
     return L.sort((p, q) => p[1] - q[1]).map(p => p[0]);
   };
@@ -964,7 +965,7 @@ const marks = !!settings.roadMarks, mkRoad = kind => lay(new THREE.MeshStandardM
     sp.yaw = Math.atan2(-fx, -fz);
   }
   if (hasHead && !snapToRoad) sp.yaw = -D.heading * Math.PI / 180; // le cap GPS prime quand le point n'a pas été recalé sur une route
-  warm(sp.x, sp.z, lo ? 1 : 2);
+  warm(sp.x, sp.z, mountainStream ? 0 : lo ? 1 : 2);
 
   /* ---- mini-carte : dessin vectoriel autour du joueur (contexte déjà tourné et centré) */
   const hexs = n => '#' + new THREE.Color(n).getHexString();
