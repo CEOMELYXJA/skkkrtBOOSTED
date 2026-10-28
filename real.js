@@ -376,7 +376,7 @@ export function buildReal(group, th, quality, D, H) {
     const endE = (r, first) => { const n = r.p.length / 2, i = first ? 0 : n - 1; return E(r.p[i * 2], r.p[i * 2 + 1]) + deckLift; };
     const bridgeWaterLevel = (x, z) => {
       if (!(D.synthetic && D.preset === 'city')) return null;
-      const rec = waterRec(D, x, z); if (!rec) return null;
+      const rec = waterRec(D, 0, 0) || waterRec(D, x, z); if (!rec) return null;
       if (rec.bridgeWl != null && rec.bridgeWlE === EL) return rec.bridgeWl;
       const NX = 18, values = [];
       for (let a = 0; a < NX; a++) for (let b = 0; b < NX; b++) {
@@ -393,7 +393,7 @@ export function buildReal(group, th, quality, D, H) {
       for (let i = 0; i < n; i++) {
         const x = r.p[i * 2], z = r.p[i * 2 + 1], sd = s0 + (rev ? tot - r.cl[i] : r.cl[i]);
         const line = hA + (hB - hA) * (L > 0 ? sd / L : 0), water = bridgeWaterLevel(x, z);
-        const waterClearance = water == null ? -Infinity : water + 3.2;
+        const waterClearance = water == null ? -Infinity : water + 4.5;
         dk[i] = Math.max(line, E(x, z) + deckLift, waterClearance);
       }
       r.deck = L >= 12 ? dk : null;
