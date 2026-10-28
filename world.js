@@ -339,6 +339,32 @@ function addPresetDetails(group, preset, api, half) {
     const muralMat = new THREE.MeshStandardMaterial({ map: graffitiTexture(), roughness: 1, side: THREE.DoubleSide });
     const mural = new THREE.Mesh(new THREE.PlaneGeometry(86, 3.2), muralMat); mural.position.set(0, 2.5, -140.12); group.add(mural);
     wall.castShadow = true;
+
+    // Usines désaffectées au-delà des bordures : les rampes et le tracé du skatepark restent intacts.
+    const concreteWall = mat(0x62696b, 0.98), roofRust = mat(0x584d46, 0.94), rust = mat(0x754b36, 0.92), glass = mat(0x202b30, 0.5, 0.18), soot = mat(0x343b3e, 0.96);
+    const warehouse = (x, z, w, d, h) => {
+      const y = groundY(x, z);
+      addBox(x, y + h / 2, z, w, h, d, concreteWall);
+      addBox(x, y + h + 0.35, z, w + 1.2, 0.7, d + 1.2, roofRust);
+      for (let k = 0; k < 6; k++) {
+        const rx = x - w * 0.42 + k * w * 0.168;
+        addBox(rx, y + h + 1.05 + (k % 2) * 0.45, z, Math.max(2, w * 0.12), 1.1, d * 0.94, k % 3 ? roofRust : rust);
+      }
+      const columns = Math.max(2, Math.floor(w / 10));
+      for (const side of [-1, 1]) for (let k = 0; k < columns; k++) {
+        const wx = x - w * 0.42 + k * w * 0.84 / Math.max(1, columns - 1);
+        const wy = y + h * (k % 3 === 0 ? 0.66 : 0.48);
+        addBox(wx, wy, z + side * (d / 2 + 0.08), 2.1, 1.35, 0.12, glass);
+        if (k % 2 === 0) addBox(wx + 1.15, wy - 2.5, z + side * (d / 2 + 0.12), 0.45, 3.0, 0.14, rust);
+      }
+      const chimney = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.8, 7 + h * 0.12, 10), soot);
+      chimney.position.set(x + w * 0.34, y + h + 4 + h * 0.06, z - d * 0.2); chimney.castShadow = true; group.add(chimney);
+      addBox(x - w * 0.22, y + h * 0.28, z + d / 2 + 0.1, w * 0.22, 0.45, 0.14, rust);
+    };
+    warehouse(0, -166, 104, 22, 19);
+    warehouse(-38, 166, 82, 22, 16);
+    warehouse(166, 12, 22, 78, 23);
+    warehouse(-166, -14, 22, 70, 18);
   }
   if (preset === 'f1') {
     const start = [0, -205], next = [92, -196], dx = next[0] - start[0], dz = next[1] - start[1], len = Math.hypot(dx, dz) || 1;
@@ -468,13 +494,14 @@ export function onLane(x, z) {
 /* ================================================================ monde */
 export function createWorld(scene, id, quality = 'med', real = null) {
   const th = THEMES[id] || THEMES.day;
+  const scenicMountains = !!(real && real.synthetic && real.preset === 'mountain');
   const group = new THREE.Group();
   scene.add(group);
   const colliders = [];
   const shadows = shadowsOn(quality);
 
   scene.background = new THREE.Color(th.fog);
-  scene.fog = new THREE.Fog(th.fog, th.fogNear, th.fogFar);
+  scene.fog = new THREE.Fog(th.fog, th.fogNear, scenicMountains ? Math.max(th.fogFar, 950) : th.fogFar);
 
   /* ---- matériaux */
   const std = (o) => new THREE.MeshStandardMaterial(o);
@@ -711,7 +738,8 @@ export function createWorld(scene, id, quality = 'med', real = null) {
   if (!real || real.synthetic) {
   /* ---- collines à l'horizon : relief continu (maillage fin, ombrage lisse, couleur par altitude) */
   {
-    const R0 = real && real.synthetic ? real.half * 1.3 : 290, R1 = R0 + 500;
+    const vistaPreset = real && real.synthetic ? real.preset : null;
+    const R0 = real && real.synthetic ? real.half * (vistaPreset === 'mountain' ? 1.02 : vistaPreset === 'skate' ? 1.16 : 1.3) : 290, R1 = R0 + (vistaPreset === 'mountain' ? 720 : 500);
     const NA = quality === 'low' ? 180 : quality === 'med' ? 320 : quality === 'high' ? 480 : 800;     // segments autour
     const NR = quality === 'low' ? 36 : quality === 'med' ? 64 : quality === 'high' ? 96 : 160;        // segments en profondeur
     const pos = [], col = [], idx = [];
@@ -720,6 +748,8 @@ export function createWorld(scene, id, quality = 'med', real = null) {
       const ramp = Math.min(1, Math.max(0, (r - R0) / 110)); const sm = ramp * ramp * (3 - 2 * ramp);
       const big = fbm(x * 0.0055 + 3.1, z * 0.0055 - 1.7, 5);
       const ridge = 1 - Math.abs(fbm(x * 0.011 - 8.3, z * 0.011 + 4.2, 4) * 2 - 1);   // crêtes
+      if (vistaPreset === 'mountain') return sm * (34 + 230 * Math.pow(big, 1.35) + 105 * ridge * ridge);
+      if (vistaPreset === 'skate') return sm * (2 + 3 * big * big + 1.5 * ridge * ridge);
       return sm * (18 + 105 * Math.pow(big, 1.5) + 34 * ridge * ridge);
     };
     for (let ir = 0; ir <= NR; ir++) {
@@ -784,15 +814,15 @@ export function createWorld(scene, id, quality = 'med', real = null) {
     stars.frustumCulled = false; group.add(stars);
   }
   let snow = null, snowP = null, snowV = null;
-  const SN = th.snow ? ({ low: 0, med: 700, high: 1600, ultra: 2400 })[quality] : 0;
+  const SN = th.snow ? ({ low: 650, med: 1300, high: 2500, ultra: 3800 })[quality] : 0;
   if (SN) {
     snowP = new Float32Array(SN * 3); snowV = new Float32Array(SN * 2);
     for (let i = 0; i < SN; i++) {
-      snowP[i * 3] = (Math.random() - 0.5) * 60; snowP[i * 3 + 1] = Math.random() * 28; snowP[i * 3 + 2] = (Math.random() - 0.5) * 60;
+      snowP[i * 3] = (Math.random() - 0.5) * 60; snowP[i * 3 + 1] = Math.random() * 38; snowP[i * 3 + 2] = (Math.random() - 0.5) * 60;
       snowV[i * 2] = 1.2 + Math.random() * 1.6; snowV[i * 2 + 1] = Math.random() * 6.28;
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(snowP, 3));
-    snow = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 0.2, map: dotTex(), alphaTest: 0.02, transparent: true, opacity: 0.92, depthWrite: false }));
+    snow = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 0.36, map: dotTex(), alphaTest: 0.02, transparent: true, opacity: 0.94, depthWrite: false }));
     snow.frustumCulled = false; group.add(snow);
   }
 
@@ -860,7 +890,7 @@ export function createWorld(scene, id, quality = 'med', real = null) {
       sun.target.position.set(px, gy, pz); sun.target.updateMatrixWorld();
     }
     if (shadows) { const sd = +settings.shadowDist || 48, sc = sun.shadow.camera; if (sc.right !== sd) { sc.left = sc.bottom = -sd; sc.right = sc.top = sd; sc.updateProjectionMatrix(); } }
-    if (snow) snow.position.y = gy;
+    if (snow) snow.position.y = cam && cam.position ? cam.position.y - 14 : gy;
     if (leaf) leaf.position.y = gy;
     for (const c of clouds) { if (c.userData.y0 == null) c.userData.y0 = c.position.y; c.position.y = c.userData.y0 + gy; }
     if (realApi) {                                              // carte réelle : les nuages suivent le joueur
@@ -877,7 +907,7 @@ export function createWorld(scene, id, quality = 'med', real = null) {
         let x = snowP[i * 3], y = snowP[i * 3 + 1], z = snowP[i * 3 + 2];
         y -= snowV[i * 2] * dt; snowV[i * 2 + 1] += dt;
         x += Math.sin(snowV[i * 2 + 1] * 1.3) * dt * 0.6; z += Math.cos(snowV[i * 2 + 1]) * dt * 0.4;
-        if (y < 0) y += 28;
+        if (y < -8) y = 34 + Math.random() * 12;
         let dx = x - px, dz = z - pz;
         if (dx > 30) x -= 60; else if (dx < -30) x += 60;
         if (dz > 30) z -= 60; else if (dz < -30) z += 60;

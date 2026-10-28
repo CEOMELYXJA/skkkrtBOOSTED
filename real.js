@@ -519,7 +519,7 @@ const marks = !!settings.roadMarks, mkRoad = kind => lay(new THREE.MeshStandardM
   const bulbMat = new THREE.MeshStandardMaterial({ color: 0x222222, emissive: th.lampHead || 0xfff1c0, emissiveIntensity: th.lampEm || 0.3 });
   const shared = [trunkGeo, leafGeo, trunkMat, leafMat, poleGeo, bulbGeo, poleMat, bulbMat];
 
-  const roadCol = col(th.road), walkCol = col(th.walk), _c = new THREE.Color(), _o = new THREE.Object3D();
+  const roadCol = col(th.road), walkCol = col(th.walk), _c = new THREE.Color(), snowWhite = new THREE.Color(0xffffff), _o = new THREE.Object3D();
   const bld = (th.bld || [0xcfc8bd]).map(col), roofC = col(th.roof);
 
   const mk = (geo, mat, cast, recv) => { const m = new THREE.Mesh(geo, mat); m.castShadow = !!cast && shadows; m.receiveShadow = !!recv && shadows; return m; };
@@ -830,7 +830,9 @@ const marks = !!settings.roadMarks, mkRoad = kind => lay(new THREE.MeshStandardM
         const s = 0.8 + rnd(seed + i * 1.7) * 0.7; TS.push(s);
         _o.position.set(T[i * 2], E(T[i * 2], T[i * 2 + 1]), T[i * 2 + 1]); _o.rotation.set(0, rnd(seed + i) * 6.28, 0); _o.scale.set(s, s * (0.9 + rnd(seed + i * 2.3) * 0.3), s); _o.updateMatrix();
         tr.setMatrixAt(i, _o.matrix); lf.setMatrixAt(i, _o.matrix);
-        _c.set(th.leafPal ? th.leafPal[Math.floor(rnd(seed + i * 6.1) * th.leafPal.length) % th.leafPal.length] : th.leaf).offsetHSL((rnd(seed + i * 9) - 0.5) * 0.04, 0, (rnd(seed + i * 4) - 0.5) * 0.1); lf.setColorAt(i, _c);
+        _c.set(th.leafPal ? th.leafPal[Math.floor(rnd(seed + i * 6.1) * th.leafPal.length) % th.leafPal.length] : th.leaf).offsetHSL((rnd(seed + i * 9) - 0.5) * 0.04, 0, (rnd(seed + i * 4) - 0.5) * 0.1);
+        if (th.snow) _c.lerp(snowWhite, 0.72);                           // branches visibly loaded with fresh snow
+        lf.setColorAt(i, _c);
       }
       g.add(tr, lf); inst.push(tr, lf);
     }
@@ -992,6 +994,11 @@ const marks = !!settings.roadMarks, mkRoad = kind => lay(new THREE.MeshStandardM
     rewards: (x, z, R) => rewardsNear(D, x, z, R),
     inWater: (x, z) => inWater(D, x, z), onBridge: (x, z) => bridgeY(D, x, z) != null,
     deckY: (x, z) => bridgeY(D, x, z),
+    bridgeCeiling: (x, z, floorY, riderY = floorY, height = 1.7) => {
+      const deck = bridgeY(D, x, z, riderY);
+      if (deck == null || Math.abs(deck - riderY) < 1.2) return false; // déjà sur le tablier
+      return deck > floorY + 0.2 && floorY + height > deck - 0.85;     // dessous du tablier trop bas
+    },
     // v9.21 : garde-corps infranchissables. Depuis le tablier, on ne peut rejoindre que (1) un autre point du tablier ou (2) le sol À LA MÊME HAUTEUR (sortie normale du pont) ; jamais le vide ni l'eau.
     bridgeLeave: (ox, oz, oy, x, z) => {
       const b0 = bridgeY(D, ox, oz, oy); if (b0 == null || Math.abs(b0 - oy) > 1.4) return null;

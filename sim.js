@@ -683,14 +683,16 @@ function safeAhead(x, z, fx, fz, snap) {
 function respawnOnLane() {
   const x = rig.position.x, z = rig.position.z;
   state.hitCd = Math.max(state.hitCd, 3);                         // quelques secondes d'immunité après être remis debout
-  if (world.real) {                                               // carte réelle : route la plus proche, dans le sens du drapeau
+  if (world.real) {                                               // carte réelle ou parcours synthétique : route la plus proche
     const r = world.api.nearestRoad(x, z);
     if (r) {
       const ref = game.targetVec(x, z) || [-Math.sin(state.yaw), -Math.cos(state.yaw)];
       const s = r.dx * ref[0] + r.dz * ref[1] < 0 ? -1 : 1;
-      const q = safeAhead(r.x, r.z, r.dx * s, r.dz * s, (qx, qz) => world.api.nearestRoad(qx, qz));
-      rig.position.x = q.x; rig.position.z = q.z; state.yaw = state.camYaw = Math.atan2(-r.dx * s, -r.dz * s); state.speed = 0;
-      log('Remis sur la route, à l’écart du véhicule.');
+      const q = world.preset === 'sky' ? { x: r.x, z: r.z } : safeAhead(r.x, r.z, r.dx * s, r.dz * s, (qx, qz) => world.api.nearestRoad(qx, qz));
+      const deck = world.api.deckY(q.x, q.z), floor = deck != null ? deck : world.api.elev(q.x, q.z);
+      rig.position.set(q.x, floor || 0, q.z);
+      state.yaw = state.camYaw = Math.atan2(-r.dx * s, -r.dz * s); state.speed = 0; state.slope = 0; state.bump = 0;
+      log(world.preset === 'sky' ? 'Réapparition sur la planche près de la chute.' : 'Remis sur la route, à l’écart du véhicule.');
     }
     return;
   }
@@ -977,7 +979,7 @@ function rideYaw(dt) {                                                 // renvoi
 }
 function rideSafe(ox, oz) {                                            // le recalage GPS ne doit jamais te pousser dans l'eau ni par-dessus le garde-corps d'un pont
   const wa = world.api, x = rig.position.x, z = rig.position.z;
-  const bad = (!wa.inWater(ox, oz) && wa.inWater(x, z)) || !!(wa.bridgeLeave && wa.bridgeLeave(ox, oz, rig.position.y, x, z));
+  const bad = (!wa.inWater(ox, oz) && wa.inWater(x, z)) || !!(wa.bridgeLeave && wa.bridgeLeave(ox, oz, rig.position.y, x, z)) || !!(wa.bridgeCeiling && wa.bridgeCeiling(x, z, wa.elev(x, z), rig.position.y, 1.7));
   if (bad) { rig.position.x = ox; rig.position.z = oz; }
 }
 function rideMove(dt, now) {
@@ -1126,6 +1128,7 @@ function frame(now) {
   const guard = (x, z) => {
     if (!inW0 && wa0.inWater(x, z)) return 'water';
     if (wa0.bridgeLeave) { const bl = wa0.bridgeLeave(px, pz, rig.position.y, x, z); if (bl) return bl; }    // garde-corps du pont : infranchissable
+    if (wa0.bridgeCeiling && wa0.bridgeCeiling(x, z, wa0.elev(x, z), rig.position.y, 1.7)) return 'ceiling';
     return null;
   };
   const hitf = (x, z) => {
@@ -1135,7 +1138,7 @@ function frame(now) {
   if (!hitf(nx, pz)) { rig.position.x = nx; moved = true; } else blocked++;
   if (!hitf(rig.position.x, nz)) { rig.position.z = nz; moved = true; } else blocked++;
   if (blocked && v0 > 1.5) {
-    if (hitWhy === 'water' || hitWhy === 'rail') { bump(); if (now - ride.waterLog > 3000) { ride.waterLog = now; log(hitWhy === 'rail' ? 'Garde-corps : on ne quitte pas le pont.' : 'Plan d’eau : on ne roule pas dessus.'); } }
+    if (hitWhy === 'water' || hitWhy === 'rail' || hitWhy === 'ceiling') { bump(); if (now - ride.waterLog > 3000) { ride.waterLog = now; log(hitWhy === 'rail' ? 'Garde-corps : on ne quitte pas le pont.' : hitWhy === 'ceiling' ? 'Dessous du pont : passage trop bas.' : 'Plan d’eau : on ne roule pas dessus.'); } }
     else if (settings.falls && !fall.on) startFall(hitWhy, v0);     // on percute un bâtiment : on tombe
     else for (let i = 0; i < blocked; i++) bump();
   }

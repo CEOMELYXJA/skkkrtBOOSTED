@@ -84,7 +84,8 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
     }
     if (bad) continue;
     const c = cls();
-    const bridge = (preset === 'city' || preset === 'mountain') && Math.abs(e.a.z - e.b.z) < 18 && Math.min(e.a.x, e.b.x) < -20 && Math.max(e.a.x, e.b.x) > 20;
+    const riverOffsets = preset === 'city' ? P.map(([x, z]) => x - 18 * Math.sin(z / 105)) : [];
+    const bridge = preset === 'city' && Math.min(...riverOffsets) < -11 && Math.max(...riverOffsets) > 11 && Math.max(...P.map(p => p[0])) - Math.min(...P.map(p => p[0])) > 24;
     const rec = { a: e.a, b: e.b, P, cls: c, bridge }; placed.push(rec);
     e.a.deg++; e.b.deg++;
   }
@@ -233,7 +234,7 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
     }
     return pts;
   };
-  if (preset === 'city' || preset === 'mountain') {
+  if (preset === 'city') {
     const a = [], b = [], count = 48;
     for (let i = 0; i <= count; i++) {
       const z = -half + 28 + i * (2 * half - 56) / count;
@@ -278,10 +279,12 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
 function syntheticHeight(preset, seed) {
   const phase = ((seed >>> 0) % 4096) / 4096 * Math.PI * 2;
   if (preset === 'mountain') return (x, z) => {
-    const peaks = 96 * Math.exp(-(((x + 190) ** 2) / 42000 + ((z + 30) ** 2) / 84000))
-      + 128 * Math.exp(-(((x - 145) ** 2) / 52000 + ((z - 130) ** 2) / 90000))
-      + 82 * Math.exp(-(((x + 35) ** 2) / 26000 + ((z - 260) ** 2) / 50000));
-    const ridge = 10 * Math.sin(x / 112 + phase) + 7 * Math.cos(z / 105 - phase) + 5 * Math.sin((x + z) / 150);
+    // Des sommets hauts autour du parcours; le sentier lui-même garde des pentes roulables.
+    const peaks = 245 * Math.exp(-(((x + 455) ** 2) / 44000 + ((z + 445) ** 2) / 52000))
+      + 270 * Math.exp(-(((x - 455) ** 2) / 50000 + ((z - 445) ** 2) / 56000))
+      + 200 * Math.exp(-(((x + 455) ** 2) / 50000 + ((z - 445) ** 2) / 48000))
+      + 220 * Math.exp(-(((x - 455) ** 2) / 52000 + ((z + 445) ** 2) / 50000));
+    const ridge = 5 * Math.sin(x / 170 + phase) + 4 * Math.cos(z / 160 - phase) + 3 * Math.sin((x + z) / 210);
     return ridge + peaks;
   };
   if (preset === 'snow') return (x, z) => {
@@ -301,6 +304,6 @@ export function makeCity(seed, tri, half = 400, preset = 'city') {
   D.synthetic = true; D.me = [0, 0]; D.heading = null; D.seed = seed; D.preset = preset;
   D.syntheticHeight = syntheticHeight(preset, seed);
   D.me = preset === 'f1' ? [0, -205] : preset === 'skate' ? [-98, -58] : preset === 'snow' ? [270, 0] : [0, 0];
-  D.syntheticHmin = preset === 'mountain' ? -45 : preset === 'city' ? -20 : preset === 'snow' ? -14 : preset === 'skate' ? -3 : -4;
+  D.syntheticHmin = preset === 'mountain' ? -16 : preset === 'city' ? -20 : preset === 'snow' ? -14 : preset === 'skate' ? -3 : -4;
   return D;
 }

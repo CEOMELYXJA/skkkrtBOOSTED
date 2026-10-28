@@ -215,7 +215,7 @@ export function createTraffic(group, D, th, quality, makeCyclist, night, deckY) 
       }
       // hauteur : sur un pont, on marche / roule sur le tablier (avant : au niveau du sol de la vallée = invisible sous le pont)
       { let ty = E(a.x, a.z); if (a.br && deckY) { const d = deckY(a.x, a.z); if (d != null) ty = d; else if (a.y != null) ty = a.y; }
-        a.y = a.y == null || a.first ? ty : a.y + (ty - a.y) * Math.min(1, dt * 10); }
+        a.y = a.y == null || a.first || (a.br && Math.abs(ty - a.y) > 1.1) ? ty : a.y + (ty - a.y) * Math.min(1, dt * 10); }
       // pose du modèle
       let p = 0;
       if (fallen) { const e = DOWN[a.type] - a.down, sm = x => x * x * (3 - 2 * x); p = e < 0.25 ? sm(e / 0.25) : a.down > 0.7 ? 1 : sm(Math.max(0, a.down / 0.7)); }
