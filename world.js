@@ -905,10 +905,11 @@ export function createWorld(scene, id, quality = 'med', real = null) {
   /* ---- ciel, nuages, étoiles, neige */
   const sky = natureOn() ? natureSky(th) : skyMesh(th); group.add(sky);
   const clouds = [];
-  if (th.clouds && (quality !== 'low' || skyOcean)) {
+  const cloudTheme = th.clouds || (skyOcean ? { col: th.stars ? 0x8896b6 : 0xb7c7d7, op: th.stars ? 0.38 : 0.68 } : null);
+  if (cloudTheme && (quality !== 'low' || skyOcean)) {
     const cloudCount = quality === 'low' ? 10 : 16;
     const cg = new THREE.SphereGeometry(1, quality === 'low' ? 24 : 64, quality === 'low' ? 16 : 45);
-    const cm = new THREE.MeshBasicMaterial({ color: th.clouds.col, transparent: true, opacity: th.clouds.op, fog: false, depthWrite: false });
+    const cm = new THREE.MeshBasicMaterial({ color: cloudTheme.col, transparent: true, opacity: cloudTheme.op, fog: false, depthWrite: false });
     for (let i = 0; i < cloudCount; i++) {
       const c = new THREE.Group();
       const n = 4 + Math.floor(rng(i) * 3);

@@ -1102,7 +1102,7 @@ function frame(now) {
   const icy = world.preset === 'snow' || settings.season === 'winter';
   if (settings.falls && icy && state.started && !fall.on && !air.active && state.speed > 4.5 && iceFallCooldown <= 0) {
     const cold = clamp((18 - (+settings.temperature || 0)) / 18, 0.18, 1.45);
-    const chance = dt * 0.00002 * state.speed * state.speed * (0.72 + Math.abs(state.steer) * 0.65) * cold;
+    const chance = dt * 0.00007 * state.speed * state.speed * (0.72 + Math.abs(state.steer) * 0.65) * cold;
     if (Math.random() < chance) { startFall('ice', state.speed); iceFallCooldown = 50 + Math.random() * 100; }
   }
 
