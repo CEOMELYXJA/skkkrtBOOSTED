@@ -144,7 +144,7 @@ export function generateCityJSON(seed, half = 400, preset = 'city') {
     return false;
   };
   const specialTrack = ['skate', 'f1', 'sky'].includes(preset);
-  const nPark = specialTrack || preset === 'snow' ? 0 : 3 + Math.floor(R() * 2), nPond = ['snow', 'sky'].includes(preset) ? 0 : preset === 'mountain' ? 4 : 2 + Math.floor(R() * 2), nWood = preset === 'mountain' ? 0 : preset === 'snow' ? 10 : specialTrack ? 0 : 2 + Math.floor(R() * 2);
+  const nPark = specialTrack || preset === 'snow' ? 0 : 3 + Math.floor(R() * 2), nPond = ['snow', 'sky', 'skate'].includes(preset) ? 0 : preset === 'mountain' ? 4 : 2 + Math.floor(R() * 2), nWood = preset === 'mountain' ? 0 : preset === 'snow' ? 10 : specialTrack ? 0 : 2 + Math.floor(R() * 2);
   for (let i = 0; i < nPark; i++) makeBlob('park', 24, 36);
   for (let i = 0; i < nPond; i++) makeBlob('water', 12, 22);
   for (let i = 0; i < nWood; i++) makeBlob('wood', 22, 34);

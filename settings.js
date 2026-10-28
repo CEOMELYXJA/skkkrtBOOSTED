@@ -18,7 +18,7 @@ export const FONTS = [
 export const DEFAULTS = {
   world: 'day',
   seed: 0,             // numéro de la ville imaginaire (0 = à tirer au hasard une fois)
-  preset: 'city',      // parcours imaginaire : city | skate | mountain | f1 | snow | sky
+  preset: 'city',      // parcours imaginaire : city | skate | f1 | snow | sky
   riderHair: 'helmet', // helmet | bald | short | medium | long
   riderGlasses: false,
   riderSkin: 'light',
@@ -111,6 +111,10 @@ function load() {
 
 const _saved = load();
 export const settings = Object.assign({}, DEFAULTS, _saved);
+if (settings.preset === 'mountain') {
+  settings.preset = 'city';
+  try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch {}
+}
 if ((_saved.mapV || 0) < 1) {
   settings.mapRadius = '800'; settings.mapV = 1;
   try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch {}

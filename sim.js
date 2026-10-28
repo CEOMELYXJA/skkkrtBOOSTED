@@ -671,14 +671,14 @@ function flash() {
 }
 function startFall(why, speed) {
   if (fall.on) return;
-  air.active = false; air.vy = 0; air.requested = false;
+  air.active = why === 'sky'; air.vy = 0; air.requested = false;
   SL.note('fall', why, Math.round(speed * 10) / 10);
   fall.on = true; fall.t = 0; fall.moved = false; fall.side = Math.random() < 0.5 ? -1 : 1;
   state.speed = 0; state.bump = 1; state.hitCd = Math.max(state.hitCd, 1);
   audio.sfx('crash'); flash();
   game.event(why === 'wall' || why === 'tree' ? 'wall' : 'cyclistfall');
   game.say('CHUTE !', 1100, 'bad');
-  log({ wall: 'Chute : collision avec un bâtiment.', tree: 'Chute : tu as percuté un arbre.', ped: 'Chute : tu as percuté un piéton.', car: 'Chute : tu as percuté un véhicule.', ice: 'Plaque glacée : tu as perdu l’adhérence et tu es tombée.' }[why] || 'Chute : tu as percuté un cycliste.');
+  log({ sky: 'Chute du relais : retour sur la passerelle près de la chute après 2 secondes.', wall: 'Chute : collision avec un bâtiment.', tree: 'Chute : tu as percuté un arbre.', ped: 'Chute : tu as percuté un piéton.', car: 'Chute : tu as percuté un véhicule.', ice: 'Plaque glacée : tu as perdu l’adhérence et tu es tombée.' }[why] || 'Chute : tu as percuté un cycliste.');
 }
 // après la chute : on est remis sur la piste cyclable la plus proche, dans le sens de la piste
 const SAFE_GAP = 12;                                                // distance libre minimale (m) autour de l'endroit où on est remis debout
@@ -704,6 +704,7 @@ function respawnOnLane() {
       const q = world.preset === 'sky' ? { x: r.x, z: r.z } : safeAhead(r.x, r.z, r.dx * s, r.dz * s, (qx, qz) => world.api.nearestRoad(qx, qz));
       const deck = world.api.deckY(q.x, q.z), floor = deck != null ? deck : world.api.elev(q.x, q.z);
       rig.position.set(q.x, floor || 0, q.z);
+      if (world.preset === 'sky') { air.active = false; air.vy = 0; air.requested = false; }
       state.yaw = state.camYaw = Math.atan2(-r.dx * s, -r.dz * s); state.speed = 0; state.slope = 0; state.bump = 0;
       log(world.preset === 'sky' ? 'Réapparition sur la planche près de la chute.' : 'Remis sur la route, à l’écart du véhicule.');
     }
@@ -1034,12 +1035,21 @@ ride.learn = pp => {
 
 
 let hitWhy = 'wall';
+const colliderContains = (b, x, z) => {
+  const dx = x - b.x, dz = z - b.z;
+  if (b.angle != null) { const c = Math.cos(b.angle), sn = Math.sin(b.angle), lx = c * dx - sn * dz, lz = sn * dx + c * dz; return Math.abs(lx) < b.hx && Math.abs(lz) < b.hz; }
+  return Math.abs(dx) < b.hx && Math.abs(dz) < b.hz;
+};
+const hitF1Stand = (x, z) => {
+  for (const b of world.colliders || []) if (b.f1Stand && colliderContains(b, x, z)) { hitWhy = 'wall'; return true; }
+  return false;
+};
 const hit = (x, z) => {
   if (world.real) {
     const k = world.api.hitKind(x, z); if (k) { hitWhy = k; return true; }
     if (world.api.inWater(x, z)) { hitWhy = 'water'; return true; }              // l'eau (hors pont) est infranchissable
   }
-  for (const b of world.colliders || []) if (Math.abs(x - b.x) < b.hx && Math.abs(z - b.z) < b.hz) { hitWhy = 'wall'; return true; }
+  for (const b of world.colliders || []) if (colliderContains(b, x, z)) { hitWhy = 'wall'; return true; }
   return false;
 };
 const loc = (x, y, z, yaw, out) => {
@@ -1152,13 +1162,14 @@ function frame(now) {
   const wa0 = world.api, onB0 = wa0.onBridge(px, pz), inW0 = wa0.inWater(px, pz);
   const guard = (x, z) => {
     if (!inW0 && wa0.inWater(x, z)) return 'water';
-    if (wa0.bridgeLeave) { const bl = wa0.bridgeLeave(px, pz, rig.position.y, x, z); if (bl) return bl; }    // garde-corps du pont : infranchissable
+    if (wa0.bridgeLeave && world.preset !== 'sky') { const bl = wa0.bridgeLeave(px, pz, rig.position.y, x, z); if (bl) return bl; }    // garde-corps infranchissables, sauf sortie volontaire du relais céleste
     if (wa0.bridgeCeiling && wa0.bridgeCeiling(x, z, wa0.elev(x, z), rig.position.y, 1.7)) return 'ceiling';
     return null;
   };
   const hitf = (x, z) => {
     const g = guard(x, z); if (g) { hitWhy = g; return true; }
-    return ride.locked ? false : hit(x, z);                             // en roulant pour vrai, le GPS a raison : pas de mur invisible (bâtiments, arbres)
+    if (ride.locked) return world.preset === 'f1' ? hitF1Stand(x, z) : false; // les gradins F1 restent solides même avec le GPS réel
+    return hit(x, z);
   };
   if (!hitf(nx, pz)) { rig.position.x = nx; moved = true; } else blocked++;
   if (!hitf(rig.position.x, nz)) { rig.position.z = nz; moved = true; } else blocked++;
@@ -1168,6 +1179,7 @@ function frame(now) {
     else for (let i = 0; i < blocked; i++) bump();
   }
   if (!moved) state.speed *= 0.5;
+  if (world.preset === 'sky' && onB0 && !wa0.onBridge(rig.position.x, rig.position.z) && !fall.on) startFall('sky', v0);
   const lim = world.real ? world.size / 2 - 30 : SIZE * 0.48;
   rig.position.x = clamp(rig.position.x, -lim, lim); rig.position.z = clamp(rig.position.z, -lim, lim);
   state.dist += state.speed * dt;
@@ -1190,6 +1202,14 @@ function frame(now) {
     if (jumpAllowed() && !air.active && before.ramp && before.ramp.t > 0.82 && !after.ramp && state.speed > 4.5) {
       const along = (vx * before.ramp.dirX + vz * before.ramp.dirZ) / Math.max(0.01, Math.hypot(vx, vz));
       if (along > 0.35) { air.active = true; air.vy = 4.6; state.bump = Math.max(state.bump, 0.25); }
+    }
+    if (world.preset === 'sky' && !air.active && air.cooldown <= 0 && before.ramp && after.ramp && before.ramp.t < 0.5 && after.ramp.t >= 0.5 && state.speed > 4.5) {
+      const along = (vx * before.ramp.dirX + vz * before.ramp.dirZ) / Math.max(0.01, Math.hypot(vx, vz));
+      if (along > 0.35) {
+        rig.position.y = Math.max(rig.position.y, after.y);
+        air.active = true; air.vy = clamp(4.4 + (state.speed - 4.5) * 0.18, 4.4, 7);
+        state.bump = Math.max(state.bump, 0.25);
+      }
     }
     if (air.active) {
       air.vy -= 9.81 * dt; rig.position.y += air.vy * dt;

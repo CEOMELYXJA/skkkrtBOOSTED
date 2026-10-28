@@ -558,6 +558,7 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
           }
         }
         addBox(cx, 4.65, cz + oz * side * 1.5, railLength, 0.25, 0.32, stand, yaw);
+        colliders.push({ x: cx, z: cz, hx: railLength / 2 + 0.2, hz: rows * 1.28 / 2 + 0.2, angle: yaw, f1Stand: true });
       }
     }
     torso.count = heads.count = people;
@@ -605,14 +606,45 @@ function addPresetDetails(group, preset, api, half, quality = 'med', rampDefs = 
       for (const yy of [0.27, 0.76]) { const band = new THREE.Mesh(new THREE.TorusGeometry(0.49, 0.055, 6, 14), bandMat); band.rotation.x = Math.PI / 2; band.position.set(x, y + yy, z); group.add(band); }
       colliders.push({ x, z, hx: 0.68, hz: 0.68 });
     };
-    for (const [x,z] of [[40,-15],[40,15],[0,0],[-40,15],[-40,-15],[0,5],[0,-5]]) placeBarrel(x, z);
+    const pathLengths = [0];
+    for (let i = 1; i < path.length; i++) pathLengths[i] = pathLengths[i - 1] + Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]);
+    const lapLength = pathLengths[pathLengths.length - 1];
+    const pointOnPath = distance => {
+      let d = ((distance % lapLength) + lapLength) % lapLength;
+      for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i], b = path[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], length = Math.hypot(dx, dz) || 1;
+        if (d <= length || i === path.length - 2) return { x: a[0] + dx / length * d, z: a[1] + dz / length * d, tx: dx / length, tz: dz / length };
+        d -= length;
+      }
+      return { x: 0, z: 0, tx: 1, tz: 0 };
+    };
+    const barrelPositions = [];
+    for (let i = 0; i < 28; i++) {
+      let p = null;
+      for (let attempt = 0; attempt < 12 && !p; attempt++) {
+        const q = pointOnPath((i + 0.5) * lapLength / 28 + attempt * 2.4), side = i % 2 ? -1 : 1;
+        const candidate = { x: q.x - q.tz * side * 3, z: q.z + q.tx * side * 3 };
+        if (Math.hypot(candidate.x - 7, candidate.z + 9) > 7 && barrelPositions.every(b => Math.hypot(candidate.x - b.x, candidate.z - b.z) > 3.8)) p = candidate;
+      }
+      if (!p) { const q = pointOnPath((i + 0.5) * lapLength / 28); p = { x: q.x - q.tz * 3, z: q.z + q.tx * 3 }; }
+      placeBarrel(p.x, p.z); barrelPositions.push(p);
+    }
     const plank = (x, z, angle = 0, width = 4.2) => {
       const y = deckY(x, z), beam = new THREE.Mesh(new THREE.BoxGeometry(width, 0.72, 0.7), plankMat);
       beam.position.set(x, y + 0.36, z); beam.rotation.y = angle; beam.castShadow = true; beam.receiveShadow = true; group.add(beam);
-      const co = Math.abs(Math.cos(angle)), si = Math.abs(Math.sin(angle));
-      colliders.push({ x, z, hx: co * width / 2 + si * 0.45, hz: si * width / 2 + co * 0.45 });
+      colliders.push({ x, z, hx: width / 2, hz: 0.45, angle });
     };
-    plank(35, -2, 0.32); plank(-35, 2, -0.55); plank(0, 22, Math.PI * 0.5); plank(0, -22, Math.PI * 0.5);
+    const plankPositions = [];
+    for (let i = 0; i < 16; i++) {
+      let p = null;
+      for (let attempt = 0; attempt < 12 && !p; attempt++) {
+        const q = pointOnPath((i + 0.5) * lapLength / 16 + attempt * 2.2), angle = Math.atan2(-q.tx, -q.tz);
+        const candidate = { x: q.x, z: q.z, angle };
+        if (Math.hypot(candidate.x - 7, candidate.z + 9) > 7 && plankPositions.every(b => Math.hypot(candidate.x - b.x, candidate.z - b.z) > 4.6) && barrelPositions.every(b => Math.hypot(candidate.x - b.x, candidate.z - b.z) > 2.9)) p = candidate;
+      }
+      if (!p) { const q = pointOnPath((i + 0.5) * lapLength / 16), angle = Math.atan2(-q.tx, -q.tz); p = { x: q.x, z: q.z, angle }; }
+      plank(p.x, p.z, p.angle); plankPositions.push(p);
+    }
     // Six crêtes pointues, doublant les anciennes pentes sur le circuit resserré.
     makeDeckSlope(24, -20, 6.1, 12, 2.8, Math.atan2(20, -4), slopeTopMat, poleMat, true);
     makeDeckSlope(48, 0, 6.1, 10, 3.4, 0, slopeTopMat, poleMat, true);
@@ -1000,12 +1032,17 @@ export function createWorld(scene, id, quality = 'med', real = null) {
   if (real && real.synthetic) {
     const detailScale = real.syntheticScale || 1, detailGroup = new THREE.Group();
     detailGroup.scale.set(detailScale, 1, detailScale); group.add(detailGroup);
-    const firstRamp = rampDefs.length;
+    const firstRamp = rampDefs.length, firstCollider = colliders.length;
     const detailApi = detailScale === 1 ? realApi : {
       elev: (x, z) => realApi.elev(x * detailScale, z * detailScale),
       deckY: (x, z) => realApi.deckY(x * detailScale, z * detailScale)
     };
     addPresetDetails(detailGroup, real.preset, detailApi, real.half, quality, rampDefs, colliders, lowPowerMountain);
+    if (detailScale !== 1 && ['f1', 'sky'].includes(real.preset)) {
+      for (let i = firstCollider; i < colliders.length; i++) {
+        const b = colliders[i]; b.x *= detailScale; b.z *= detailScale; b.hx *= detailScale; b.hz *= detailScale;
+      }
+    }
     if (detailScale !== 1) for (let i = firstRamp; i < rampDefs.length; i++) {
       const r = rampDefs[i]; r.x *= detailScale; r.z *= detailScale; r.width *= detailScale; r.length *= detailScale;
     }
